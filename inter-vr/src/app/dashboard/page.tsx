@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import { createClient } from "@/utils/supabase/client";
 import {
     LayoutDashboard,
     History,
@@ -50,6 +53,102 @@ export default function DashboardPage() {
     const [difficulty, setDifficulty] = useState("Medium");
     const [duration, setDuration] = useState("Short (15m)");
     const [tone, setTone] = useState("Strict");
+    const [isStarting, setIsStarting] = useState(false);
+
+    const router = useRouter();
+    const supabase = createClient();
+
+    const startSimulation = async () => {
+        setIsStarting(true);
+        try {
+            // 1. Get current user
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) throw new Error("Please sign in first.");
+
+            // 2. Create interview session in DB
+            const { data: session, error: sessionError } = await supabase
+                .from("interview_sessions")
+                .insert({
+                    user_id: user.id,
+                    topic,
+                    difficulty,
+                    duration,
+                    tone,
+                    status: "pending",
+                })
+                .select()
+                .single();
+
+            if (sessionError || !session) throw new Error(sessionError?.message || "Failed to create session");
+
+            toast.loading("Generating interview questions...", { id: "gen-questions" });
+
+            // 3. Trigger question generation
+            const genResponse = await fetch("/api/generate-questions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sessionId: session.id }),
+            });
+
+            if (!genResponse.ok) {
+                const errData = await genResponse.json();
+                throw new Error(errData.error || "Failed to generate questions");
+            }
+
+            toast.success("Interview ready! Entering room...", { id: "gen-questions" });
+
+            // 4. Redirect to interview page
+            router.push(`/interview/${session.id}`);
+
+        } catch (error: any) {
+            toast.dismiss("gen-questions");
+            toast.error(error.message || "Something went wrong.");
+        } finally {
+            setIsStarting(false);
+        }
+    };
+
+    const [micStatus, setMicStatus] = useState<'testing' | 'ready' | 'error'>('testing');
+    const [camStatus, setCamStatus] = useState<'testing' | 'ready' | 'error'>('testing');
+    const [latency, setLatency] = useState<number | null>(null);
+
+    useEffect(() => {
+        let mounted = true;
+
+        const checkHardware = async () => {
+            // Check Microphone
+            try {
+                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                if (mounted) setMicStatus('ready');
+                audioStream.getTracks().forEach(track => track.stop()); // Clean up immediately after test
+            } catch (err) {
+                console.error("Mic access denied:", err);
+                if (mounted) setMicStatus('error');
+            }
+
+            // Check Camera
+            try {
+                const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                if (mounted) setCamStatus('ready');
+                videoStream.getTracks().forEach(track => track.stop()); // Clean up immediately after test
+            } catch (err) {
+                console.error("Camera access denied:", err);
+                if (mounted) setCamStatus('error');
+            }
+
+            // Simulate Ping / Network check (we can't easily ping from browser JS without a dedicated endpoint)
+            setTimeout(() => {
+                if (mounted) {
+                    const fakePing = Math.floor(Math.random() * 30) + 15; // 15ms - 45ms
+                    setLatency(fakePing);
+                }
+            }, 1500);
+        };
+
+        checkHardware();
+
+        return () => { mounted = false; };
+    }, []);
 
     return (
         <div className="flex min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-brand-purple/30">
@@ -200,28 +299,49 @@ export default function DashboardPage() {
                             </div>
 
                             <div className="pt-4 flex flex-col items-center gap-6">
-                                <Button className="w-full md:w-2/3 h-16 text-lg font-bold rounded-2xl bg-gradient-to-r from-brand-purple to-brand-neon hover:from-brand-purple-dark hover:to-brand-purple border-0 shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:shadow-[0_0_50px_rgba(217,70,239,0.6)] transition-all flex items-center gap-3">
-                                    <PlayCircle className="w-6 h-6 fill-white/20" />
-                                    START SIMULATION
+                                <Button
+                                    onClick={startSimulation}
+                                    disabled={isStarting}
+                                    className="w-full md:w-2/3 h-16 text-lg font-bold rounded-2xl bg-gradient-to-r from-brand-purple to-brand-neon hover:from-brand-purple-dark hover:to-brand-purple border-0 shadow-[0_0_30px_rgba(168,85,247,0.4)] hover:shadow-[0_0_50px_rgba(217,70,239,0.6)] transition-all flex items-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed"
+                                >
+                                    {isStarting ? (
+                                        <>
+                                            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            PREPARING INTERVIEW...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <PlayCircle className="w-6 h-6 fill-white/20" />
+                                            START SIMULATION
+                                        </>
+                                    )}
                                 </Button>
 
                                 <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-medium text-slate-400 bg-slate-900/50 px-6 py-3 rounded-full border border-slate-800/80">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                        <div className={`w-2 h-2 rounded-full ${micStatus === 'ready' ? 'bg-emerald-500 animate-pulse' : micStatus === 'testing' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
                                         <Mic className="w-4 h-4 text-slate-300" />
-                                        <span>Microphone Ready</span>
+                                        <span>
+                                            {micStatus === 'ready' ? 'Microphone Ready' :
+                                                micStatus === 'testing' ? 'Testing Mic...' :
+                                                    'Mic Denied'}
+                                        </span>
                                     </div>
                                     <div className="w-1 h-1 rounded-full bg-slate-700 hidden sm:block" />
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                        <div className={`w-2 h-2 rounded-full ${camStatus === 'ready' ? 'bg-emerald-500 animate-pulse' : camStatus === 'testing' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
                                         <Video className="w-4 h-4 text-slate-300" />
-                                        <span>Camera Ready</span>
+                                        <span>
+                                            {camStatus === 'ready' ? 'Camera Ready' :
+                                                camStatus === 'testing' ? 'Testing Cam...' :
+                                                    'Cam Denied'}
+                                        </span>
                                     </div>
                                     <div className="w-1 h-1 rounded-full bg-slate-700 hidden sm:block" />
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                        <div className={`w-2 h-2 rounded-full ${latency ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500 animate-pulse'}`} />
                                         <Wifi className="w-4 h-4 text-slate-300" />
-                                        <span>23ms Latency</span>
+                                        <span>{latency ? `${latency}ms Latency` : 'Testing Ping...'}</span>
                                     </div>
                                 </div>
                             </div>

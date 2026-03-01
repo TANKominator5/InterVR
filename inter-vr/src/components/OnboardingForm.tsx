@@ -152,6 +152,15 @@ export function OnboardingForm() {
 
             if (dbError) throw new Error(dbError.message || "Failed to save profile");
 
+            // Fire-and-forget: trigger background resume processing via Gemini
+            if (resumeUrl) {
+                fetch("/api/process-resume", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ resumeUrl, userId: user.id }),
+                }).catch((err) => console.error("Background resume processing failed:", err));
+            }
+
             toast.success("Profile setup complete! Welcome to InterVR.");
             router.push("/dashboard");
 

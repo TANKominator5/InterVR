@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   state TEXT,
   tech_stack TEXT,
   resume_url TEXT,
+  processed_resume JSONB,
+  resume_processing_status TEXT DEFAULT 'none',
   onboarding_completed BOOLEAN DEFAULT FALSE,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -58,3 +60,61 @@ USING (
   bucket_id = 'resumes' AND
   (storage.foldername(name))[1] = auth.uid()::text
 );
+
+-- =============================================
+-- 6. Interview Sessions Table
+-- =============================================
+CREATE TABLE IF NOT EXISTS public.interview_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  topic TEXT NOT NULL,
+  difficulty TEXT NOT NULL,
+  duration TEXT NOT NULL,
+  tone TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  questions JSONB,
+  livekit_room_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+ALTER TABLE public.interview_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own sessions"
+ON public.interview_sessions FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own sessions"
+ON public.interview_sessions FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own sessions"
+ON public.interview_sessions FOR UPDATE
+USING (auth.uid() = user_id);
+
+-- =============================================
+-- 7. Interview Reports Table
+-- =============================================
+CREATE TABLE IF NOT EXISTS public.interview_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID REFERENCES public.interview_sessions(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
+  overall_score INTEGER,
+  duration_minutes INTEGER,
+  questions_answered INTEGER,
+  breakdown JSONB,
+  summary TEXT,
+  strengths TEXT[],
+  areas_to_improve TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.interview_reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own reports"
+ON public.interview_reports FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own reports"
+ON public.interview_reports FOR INSERT
+WITH CHECK (auth.uid() = user_id);
