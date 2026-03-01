@@ -2,8 +2,12 @@
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID REFERENCES auth.users NOT NULL PRIMARY KEY,
   full_name TEXT,
+  institution_name TEXT,
+  year_of_study TEXT,
+  cgpa NUMERIC(4,2),
+  country TEXT,
+  state TEXT,
   tech_stack TEXT,
-  interviewer_persona TEXT,
   resume_url TEXT,
   onboarding_completed BOOLEAN DEFAULT FALSE,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,

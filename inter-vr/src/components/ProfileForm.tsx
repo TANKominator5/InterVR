@@ -9,7 +9,8 @@ import toast from "react-hot-toast";
 import { UploadCloud, CheckCircle2, Loader2, GraduationCap, MapPin, User as UserIcon, FileText } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
-const onboardingSchema = z.object({
+// Resume upload is optional on the profile page
+const profileSchema = z.object({
     fullName: z.string().min(2, "Full name is required"),
     country: z.string().min(2, "Country is required"),
     state: z.string().min(2, "State/Region is required"),
@@ -19,7 +20,7 @@ const onboardingSchema = z.object({
     techStack: z.string().min(1, "Please select a target role"),
 });
 
-type OnboardingValues = z.infer<typeof onboardingSchema>;
+type ProfileValues = z.infer<typeof profileSchema>;
 
 const STUDY_YEARS = [
     "1st Year",
@@ -42,7 +43,11 @@ const ROLES = [
     "Product Manager",
 ];
 
-export function OnboardingForm() {
+interface ProfileFormProps {
+    initialData: any;
+}
+
+export function ProfileForm({ initialData }: ProfileFormProps) {
     const [file, setFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,16 +60,16 @@ export function OnboardingForm() {
         register,
         handleSubmit,
         formState: { errors },
-    } = useForm<OnboardingValues>({
-        resolver: zodResolver(onboardingSchema),
+    } = useForm<ProfileValues>({
+        resolver: zodResolver(profileSchema),
         defaultValues: {
-            fullName: "",
-            country: "",
-            state: "",
-            institutionName: "",
-            yearOfStudy: "",
-            cgpa: undefined,
-            techStack: "",
+            fullName: initialData?.full_name || "",
+            country: initialData?.country || "",
+            state: initialData?.state || "",
+            institutionName: initialData?.institution_name || "",
+            yearOfStudy: initialData?.year_of_study || "",
+            cgpa: initialData?.cgpa || undefined,
+            techStack: initialData?.tech_stack || "",
         },
     });
 
@@ -103,41 +108,34 @@ export function OnboardingForm() {
         }
     };
 
-    const onSubmit = async (data: OnboardingValues) => {
-        if (!file) {
-            toast.error("Please upload your resume");
-            return;
-        }
-
+    const onSubmit = async (data: ProfileValues) => {
         setIsSubmitting(true);
-        let resumeUrl = "";
+        let resumeUrl = initialData?.resume_url || "";
 
         try {
-            // 1. Get current authenticated user
             const { data: { user }, error: userError } = await supabase.auth.getUser();
-            if (userError || !user) throw new Error("Please sign in to complete onboarding.");
+            if (userError || !user) throw new Error("Please sign in to update profile.");
 
-            // 2. Upload resume to Supabase Storage
-            const fileExt = file.name.split('.').pop();
-            const filePath = `${user.id}/${Math.random()}.${fileExt}`;
-            const { error: uploadError } = await supabase.storage
-                .from('resumes')
-                .upload(filePath, file);
+            if (file) {
+                const fileExt = file.name.split('.').pop();
+                const filePath = `${user.id}/${Math.random()}.${fileExt}`;
+                const { error: uploadError } = await supabase.storage
+                    .from('resumes')
+                    .upload(filePath, file);
 
-            if (uploadError) throw new Error("Failed to upload resume");
+                if (uploadError) throw new Error("Failed to upload resume");
 
-            // Get public URL
-            const { data: publicUrlData } = supabase.storage
-                .from('resumes')
-                .getPublicUrl(filePath);
+                const { data: publicUrlData } = supabase.storage
+                    .from('resumes')
+                    .getPublicUrl(filePath);
 
-            resumeUrl = publicUrlData.publicUrl;
+                resumeUrl = publicUrlData.publicUrl;
+            }
 
-            // 3. Save onboarding details to users table
             const { error: dbError } = await supabase
                 .from('users')
                 .upsert({
-                    id: user.id, // Primary key
+                    id: user.id,
                     full_name: data.fullName,
                     country: data.country,
                     state: data.state,
@@ -150,13 +148,13 @@ export function OnboardingForm() {
                     updated_at: new Date().toISOString(),
                 });
 
-            if (dbError) throw new Error(dbError.message || "Failed to save profile");
+            if (dbError) throw new Error(dbError.message || "Failed to update profile");
 
-            toast.success("Profile setup complete! Welcome to InterVR.");
+            toast.success("Profile updated perfectly!");
             router.push("/dashboard");
 
         } catch (error: any) {
-            toast.error(error.message || "An error occurred during onboarding.");
+            toast.error(error.message || "An error occurred during update.");
         } finally {
             setIsSubmitting(false);
         }
@@ -168,8 +166,8 @@ export function OnboardingForm() {
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-brand-neon/10 rounded-full blur-[80px] -ml-24 -mb-24 pointer-events-none" />
 
             <div className="mb-10 text-center relative z-10">
-                <h2 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Complete Your Profile</h2>
-                <p className="text-slate-400">Tell us a bit about yourself so the AI can personalize your interview experience.</p>
+                <h2 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Edit Profile</h2>
+                <p className="text-slate-400">Keep your academic context up to date for the best AI interview experience.</p>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-10 relative z-10">
@@ -282,10 +280,10 @@ export function OnboardingForm() {
                     </div>
 
                     <div className="pt-2">
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Resume Upload (PDF)</label>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Update Resume (PDF) - Optional</label>
                         <div
                             className={`border-2 border-dashed rounded-3xl p-10 text-center transition-all ${isDragging ? "border-brand-neon bg-brand-neon/5" :
-                                file ? "border-emerald-500/50 bg-emerald-500/5" :
+                                file || initialData?.resume_url ? "border-emerald-500/50 bg-emerald-500/5" :
                                     "border-slate-700 bg-slate-950 hover:border-brand-purple/50"
                                 }`}
                             onDragOver={handleDragOver}
@@ -301,22 +299,26 @@ export function OnboardingForm() {
                                 onChange={handleFileSelect}
                             />
 
-                            {file ? (
+                            {file || initialData?.resume_url ? (
                                 <div className="flex flex-col items-center gap-3">
                                     <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 mb-2 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
                                         <CheckCircle2 className="w-8 h-8" />
                                     </div>
-                                    <div className="text-white font-medium">{file.name}</div>
-                                    <div className="text-sm text-slate-400 mb-4">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
+                                    <div className="text-white font-medium">
+                                        {file ? file.name : "Resume currently uploaded"}
+                                    </div>
+                                    {file && <div className="text-sm text-slate-400 mb-4">{(file.size / 1024 / 1024).toFixed(2)} MB</div>}
                                     <button
                                         type="button"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setFile(null);
+                                            // Provide option to actually pick a new file if we just cleared a new one being drafted
+                                            if (!file) fileInputRef.current?.click();
                                         }}
-                                        className="px-4 py-2 bg-slate-800 hover:bg-red-500/20 hover:text-red-400 text-slate-300 rounded-lg text-sm transition-colors"
+                                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors mt-2"
                                     >
-                                        Remove File
+                                        {file ? "Remove New File" : "Upload Different Resume"}
                                     </button>
                                 </div>
                             ) : (
@@ -344,10 +346,10 @@ export function OnboardingForm() {
                         {isSubmitting ? (
                             <>
                                 <Loader2 className="w-6 h-6 animate-spin" />
-                                Saving Profile...
+                                Updating Profile...
                             </>
                         ) : (
-                            "Save & Continue to Dashboard"
+                            "Update Profile"
                         )}
                     </button>
                 </div>
