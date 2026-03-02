@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { createClient } from "@/utils/supabase/server";
+import { createGroq } from "@ai-sdk/groq";
+import { generateText } from "ai";
 
+const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
 const NIM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 
-function buildSystemPrompt(userContext: any, config: any): string {
-    const questionCount = config.duration === "Short (15m)" ? 5
-        : config.duration === "Medium (30m)" ? 10
-            : 15;
-
-    return `You are an expert technical interviewer conducting a ${config.difficulty} level interview.
+function buildPrompt(userContext: any, session: any, questionCount: number): string {
+    return `You are an expert technical interviewer. Generate exactly ${questionCount} interview questions.
 
 CANDIDATE CONTEXT:
 - Name: ${userContext.full_name || "Candidate"}
 - Institution: ${userContext.institution_name || "Not specified"}
-- Year of Study: ${userContext.year_of_study || "Not specified"}  
+- Year of Study: ${userContext.year_of_study || "Not specified"}
 - CGPA: ${userContext.cgpa || "Not specified"}
 - Target Role: ${userContext.tech_stack || "Software Developer"}
 
@@ -22,30 +20,74 @@ RESUME HIGHLIGHTS:
 ${userContext.processed_resume ? JSON.stringify(userContext.processed_resume, null, 2) : "No resume data available"}
 
 INTERVIEW CONFIGURATION:
-- Topic: ${config.topic}
-- Difficulty: ${config.difficulty}
-- Tone: ${config.tone} (be ${config.tone.toLowerCase()} in your questioning style)
-- Number of questions: ${questionCount}
+- Topic: ${session.topic}
+- Difficulty: ${session.difficulty}
+- Tone: ${session.tone} (be ${session.tone.toLowerCase()} in your questioning style)
 
 INSTRUCTIONS:
-Generate exactly ${questionCount} interview questions for the topic "${config.topic}".
 - Questions should be progressively harder
 - Tailor questions based on the candidate's resume, projects, and experience level
 - Include a mix of conceptual, practical, and scenario-based questions
 - For coding topics, include at least 1-2 code-related questions
 - If the candidate's resume mentions relevant projects, ask about them
+- Generate exactly ${questionCount} questions
 
-Return ONLY a valid JSON array (no markdown, no code fences, just raw JSON):
-[
-  {
-    "id": 1,
-    "question": "The question text",
-    "category": "conceptual|practical|scenario|coding",
-    "difficulty": "easy|medium|hard",
-    "expected_answer_outline": "Key points the answer should cover",
-    "follow_up_hint": "A potential follow-up if the answer is vague"
-  }
-]`;
+Return ONLY a valid JSON object: {"questions": [...]}
+Each question must have: id (number), question (string), category (conceptual|practical|scenario|coding), difficulty (easy|medium|hard), expected_answer_outline (string), follow_up_hint (string)`;
+}
+
+// Try NIM API with a 15-second timeout
+async function tryNIM(prompt: string): Promise<any[] | null> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    try {
+        const res = await fetch(NIM_API_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${process.env.NVIDIA_NIM_API_KEY}`,
+            },
+            body: JSON.stringify({
+                model: "nvidia/llama-3.3-nemotron-super-49b-v1",
+                messages: [
+                    { role: "user", content: prompt },
+                ],
+                temperature: 0.7,
+                max_tokens: 4096,
+            }),
+            signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+            console.warn(`NIM returned ${res.status}, falling back to Groq`);
+            return null;
+        }
+
+        const data = await res.json();
+        const raw = data.choices?.[0]?.message?.content || "";
+        const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        return parsed.questions || parsed;
+    } catch (err: any) {
+        clearTimeout(timeout);
+        console.warn("NIM failed/timed out:", err.name === "AbortError" ? "15s timeout" : err.message);
+        return null;
+    }
+}
+
+// Fallback: Groq via Vercel AI SDK (sub-second)
+async function useGroqFallback(prompt: string): Promise<any[]> {
+    console.log("Using Groq fallback for question generation...");
+    const { text } = await generateText({
+        model: groq("llama-3.3-70b-versatile"),
+        prompt,
+    });
+    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    return parsed.questions || parsed;
 }
 
 export async function POST(request: NextRequest) {
@@ -58,7 +100,6 @@ export async function POST(request: NextRequest) {
 
         const supabaseAdmin = createAdminClient();
 
-        // 1. Fetch the session details
         const { data: session, error: sessionError } = await supabaseAdmin
             .from("interview_sessions")
             .select("*")
@@ -69,7 +110,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Session not found" }, { status: 404 });
         }
 
-        // 2. Fetch user context (profile + processed resume)
         const { data: userContext, error: userError } = await supabaseAdmin
             .from("users")
             .select("full_name, institution_name, year_of_study, cgpa, tech_stack, processed_resume")
@@ -80,96 +120,49 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "User profile not found" }, { status: 404 });
         }
 
-        // 3. Update session status to generating
         await supabaseAdmin
             .from("interview_sessions")
             .update({ status: "generating" })
             .eq("id", sessionId);
 
-        // 4. Call NVIDIA NIM API (Nemotron Ultra)
-        const systemPrompt = buildSystemPrompt(userContext, {
-            topic: session.topic,
-            difficulty: session.difficulty,
-            duration: session.duration,
-            tone: session.tone,
-        });
+        const questionCount = session.duration === "Short (15m)" ? 5
+            : session.duration === "Medium (30m)" ? 10 : 15;
 
-        const nimResponse = await fetch(NIM_API_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${process.env.NVIDIA_NIM_API_KEY}`,
-            },
-            body: JSON.stringify({
-                model: "nvidia/llama-3.3-nemotron-super-49b-v1",
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: "Generate the interview questions now." },
-                ],
-                temperature: 0.7,
-                max_tokens: 4096,
-            }),
-        });
+        const prompt = buildPrompt(userContext, session, questionCount);
 
-        if (!nimResponse.ok) {
-            const errBody = await nimResponse.text();
-            console.error("NIM API error:", nimResponse.status, errBody);
-            throw new Error(`NIM API failed: ${nimResponse.status}`);
+        // Try NIM first (15s timeout), fall back to Groq
+        let questions = await tryNIM(prompt);
+        const source = questions ? "nemotron" : "groq";
+
+        if (!questions) {
+            questions = await useGroqFallback(prompt);
         }
 
-        const nimData = await nimResponse.json();
-        const rawContent = nimData.choices?.[0]?.message?.content || "";
-
-        // 5. Parse questions JSON
-        let questions;
-        try {
-            const cleanJson = rawContent
-                .replace(/```json\n?/g, "")
-                .replace(/```\n?/g, "")
-                .trim();
-            questions = JSON.parse(cleanJson);
-        } catch (parseError) {
-            console.error("Failed to parse NIM response:", rawContent);
-            throw new Error("Failed to parse generated questions");
-        }
-
-        // 6. Save questions to session and mark as ready
         const { error: updateError } = await supabaseAdmin
             .from("interview_sessions")
-            .update({
-                questions: questions,
-                status: "ready",
-            })
+            .update({ questions, status: "ready" })
             .eq("id", sessionId);
 
-        if (updateError) {
-            throw new Error(`Failed to save questions: ${updateError.message}`);
-        }
+        if (updateError) throw new Error(`Failed to save: ${updateError.message}`);
+
+        console.log(`Questions generated via ${source} (${questions.length} questions)`);
 
         return NextResponse.json({
             success: true,
             sessionId,
             questionCount: questions.length,
+            source,
         });
 
     } catch (error: any) {
         console.error("Question generation error:", error);
-
-        // Try to mark session as failed
         try {
-            const { sessionId } = await request.clone().json();
-            if (sessionId) {
+            const body = await request.clone().json();
+            if (body.sessionId) {
                 const supabase = createAdminClient();
-                await supabase
-                    .from("interview_sessions")
-                    .update({ status: "failed" })
-                    .eq("id", sessionId);
+                await supabase.from("interview_sessions").update({ status: "failed" }).eq("id", body.sessionId);
             }
         } catch { }
-
-        return NextResponse.json(
-            { error: error.message || "Failed to generate questions" },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: error.message || "Failed to generate questions" }, { status: 500 });
     }
 }
