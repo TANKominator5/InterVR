@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createGroq } from "@ai-sdk/groq";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { createAdminClient } from "@/utils/supabase/admin";
 
-const groq = createGroq({ apiKey: process.env.GROQ_API_KEY });
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GOOGLE_GEMINI_API_KEY,
+});
 
 export async function POST(request: NextRequest) {
-    try {
-        const { sessionId, questionIndex, question, answer, userContext } = await request.json();
+  try {
+    const { sessionId, questionIndex, question, answer, userContext } =
+      await request.json();
 
-        if (!question || !answer) {
-            return NextResponse.json({ error: "Missing question or answer" }, { status: 400 });
-        }
+    if (!question || !answer) {
+      return NextResponse.json(
+        { error: "Missing question or answer" },
+        { status: 400 },
+      );
+    }
 
-        const prompt = `You are an expert technical interviewer grading a candidate's answer.
+    const prompt = `You are an expert technical interviewer grading a candidate's answer.
 Return ONLY valid JSON with no markdown fences.
 
 CANDIDATE CONTEXT:
@@ -45,45 +51,48 @@ Return this exact JSON structure:
   "is_complete": <true/false>
 }`;
 
-        const { text } = await generateText({
-            model: groq("llama-3.3-70b-versatile"),
-            prompt,
-        });
+    const { text } = await generateText({
+      model: google("gemini-2.5-flash"),
+      prompt,
+    });
 
-        const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        const grading = JSON.parse(cleaned);
+    const cleaned = text
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+    const grading = JSON.parse(cleaned);
 
-        // Persist grading to Supabase
-        if (sessionId !== undefined && questionIndex !== undefined) {
-            const supabase = createAdminClient();
-            const { data: session } = await supabase
-                .from("interview_sessions")
-                .select("questions")
-                .eq("id", sessionId)
-                .single();
+    // Persist grading to Supabase
+    if (sessionId !== undefined && questionIndex !== undefined) {
+      const supabase = createAdminClient();
+      const { data: session } = await supabase
+        .from("interview_sessions")
+        .select("questions")
+        .eq("id", sessionId)
+        .single();
 
-            if (session?.questions) {
-                const updatedQuestions = [...session.questions];
-                if (updatedQuestions[questionIndex]) {
-                    updatedQuestions[questionIndex] = {
-                        ...updatedQuestions[questionIndex],
-                        answer_transcript: answer,
-                        grading,
-                    };
-                    await supabase
-                        .from("interview_sessions")
-                        .update({ questions: updatedQuestions })
-                        .eq("id", sessionId);
-                }
-            }
+      if (session?.questions) {
+        const updatedQuestions = [...session.questions];
+        if (updatedQuestions[questionIndex]) {
+          updatedQuestions[questionIndex] = {
+            ...updatedQuestions[questionIndex],
+            answer_transcript: answer,
+            grading,
+          };
+          await supabase
+            .from("interview_sessions")
+            .update({ questions: updatedQuestions })
+            .eq("id", sessionId);
         }
-
-        return NextResponse.json({ grading });
-    } catch (error: any) {
-        console.error("Grading error:", error);
-        return NextResponse.json(
-            { error: error.message || "Grading failed" },
-            { status: 500 }
-        );
+      }
     }
+
+    return NextResponse.json({ grading });
+  } catch (error: any) {
+    console.error("Grading error:", error);
+    return NextResponse.json(
+      { error: error.message || "Grading failed" },
+      { status: 500 },
+    );
+  }
 }
