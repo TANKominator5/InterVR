@@ -5,21 +5,18 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { createClient } from "@/utils/supabase/client";
 import {
-    LayoutDashboard,
     History,
-    Trophy,
-    Settings,
     Mic,
     Video,
     Wifi,
     Brain,
     Eye,
     Flame,
-    Menu,
-    X,
     PlayCircle,
     User as UserIcon,
-    FileText
+    FileText,
+    ChevronDown,
+    X,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,8 +24,21 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
 export default function DashboardPage() {
-    const [isSidebarOpen, setSidebarOpen] = useState(false);
-    const [topic, setTopic] = useState("Next.js & React");
+    const [selectedTopics, setSelectedTopics] = useState<string[]>(["Next.js & React"]);
+    const [isTopicDropdownOpen, setIsTopicDropdownOpen] = useState(false);
+
+    // Constant list of topics
+    const availableTopics = [
+        "Next.js & React",
+        "Flutter & Dart",
+        "PostgreSQL",
+        "Docker & K8s",
+        "System Design",
+        "Behavioral",
+        "Python & Django",
+        "Go & Microservices",
+        "Java & Spring Boot"
+    ];
     const [difficulty, setDifficulty] = useState("Medium (Junior/Mid)");
     const [duration, setDuration] = useState("Short (15m)");
     const [tone, setTone] = useState("Strict");
@@ -120,7 +130,7 @@ export default function DashboardPage() {
                 .from("interview_sessions")
                 .insert({
                     user_id: user.id,
-                    topic,
+                    topic: selectedTopics.join(", "),
                     difficulty,
                     duration,
                     tone,
@@ -208,82 +218,17 @@ export default function DashboardPage() {
     return (
         <div className="flex min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-brand-purple/30">
 
-            {/* Mobile Overlay */}
-            {isSidebarOpen && (
-                <div
-                    className="fixed inset-0 z-40 bg-black/60 md:hidden backdrop-blur-sm"
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
-
-            {/* Sidebar Navigation */}
-            <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-950/80 backdrop-blur-md border-r border-slate-800 transition-transform duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-                <div className="flex h-16 items-center justify-between px-6 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-lg bg-brand-purple/20 text-brand-neon flex items-center justify-center">
-                            <Brain className="h-5 w-5" />
-                        </div>
-                        <span className="text-xl font-bold tracking-tight">Inter<span className="text-brand-purple">VR</span></span>
-                    </div>
-                    <button className="md:hidden text-slate-400 hover:text-white" onClick={() => setSidebarOpen(false)}>
-                        <X className="h-5 w-5" />
-                    </button>
-                </div>
-
-                <nav className="p-4 space-y-2">
-                    <a href="#" className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-brand-purple/10 text-brand-neon font-medium">
-                        <LayoutDashboard className="h-5 w-5" />
-                        Dashboard
-                    </a>
-                    <a href="#" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-slate-900 hover:text-slate-200 transition-colors">
-                        <History className="h-5 w-5" />
-                        Interview History
-                    </a>
-                    <a href="#" className="flex items-center justify-between px-3 py-2.5 rounded-lg text-slate-500 cursor-not-allowed">
-                        <div className="flex items-center gap-3">
-                            <Trophy className="h-5 w-5" />
-                            Leaderboard
-                        </div>
-                        <Badge variant="outline" className="text-[10px] border-slate-700 text-slate-500">Soon</Badge>
-                    </a>
-                    <div className="pt-4 mt-4 border-t border-slate-800/50">
-                        <a href="/profile" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:bg-slate-900 hover:text-slate-200 transition-colors">
-                            <Settings className="h-5 w-5" />
-                            Settings
-                        </a>
-                    </div>
-                </nav>
-            </aside>
-
             {/* Main Content */}
             <main className="flex-1 flex flex-col min-h-screen overflow-x-hidden relative">
                 {/* Background glow effects */}
                 <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-purple/10 rounded-full blur-[120px] pointer-events-none -mr-40 -mt-20 mix-blend-screen" />
                 <div className="absolute bottom-40 left-20 w-[400px] h-[400px] bg-brand-neon/5 rounded-full blur-[100px] pointer-events-none mix-blend-screen" />
 
-                {/* Top Bar */}
-                <header className="sticky top-0 z-30 flex h-16 items-center justify-between px-4 md:px-8 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
-                    <div className="flex items-center gap-4">
-                        <button className="md:hidden text-slate-400 hover:text-white" onClick={() => setSidebarOpen(true)}>
-                            <Menu className="h-6 w-6" />
-                        </button>
-                        <div>
-                            <h1 className="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 antialiased">Welcome back, {userFirstName}</h1>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="hidden md:flex flex-col items-end">
-                            <span className="text-sm font-medium text-slate-200">{userData?.full_name || "Guest"}</span>
-                            <span className="text-xs text-brand-neon">{userRole}</span>
-                        </div>
-                        <div className="h-10 w-10 rounded-full bg-slate-800 border-2 border-brand-purple flex items-center justify-center font-bold text-brand-neon">
-                            {userInitial}
-                        </div>
-                    </div>
-                </header>
-
                 {/* Dashboard Content */}
                 <div className="flex-1 p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full z-10">
+                    <div className="mb-2 md:mb-4">
+                        <h1 className="text-3xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight">Welcome back, {userFirstName}</h1>
+                    </div>
 
                     {/* Primary Action Card: Enter VR Room */}
                     <Card className="relative overflow-hidden border-slate-700/60 bg-slate-950/40 backdrop-blur-xl shadow-2xl">
@@ -303,20 +248,72 @@ export default function DashboardPage() {
                         </CardHeader>
 
                         <CardContent className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Topic</label>
-                                    <select
-                                        value={topic} onChange={(e) => setTopic(e.target.value)}
-                                        className="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-brand-purple focus:ring-1 focus:ring-brand-purple transition-all outline-none appearance-none"
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                                <div className="space-y-2 relative md:col-span-2 lg:col-span-2">
+                                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Topics</label>
+
+                                    {/* Custom Multi-Select Input Box */}
+                                    <div
+                                        className="w-full min-h-[42px] bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-sm focus-within:border-brand-purple focus-within:ring-1 focus-within:ring-brand-purple transition-all cursor-text flex flex-wrap gap-2 items-center relative"
+                                        onClick={() => setIsTopicDropdownOpen(!isTopicDropdownOpen)}
                                     >
-                                        <option>Next.js & React</option>
-                                        <option>Flutter & Dart</option>
-                                        <option>PostgreSQL</option>
-                                        <option>Docker & K8s</option>
-                                        <option>System Design</option>
-                                        <option>Behavioral</option>
-                                    </select>
+                                        <div className="flex flex-wrap gap-2 flex-grow">
+                                            {selectedTopics.length === 0 && (
+                                                <span className="text-slate-500 py-0.5">Select technologies or topics...</span>
+                                            )}
+                                            {selectedTopics.map(t => (
+                                                <div key={t} className="flex items-center gap-1 bg-brand-purple/20 text-brand-neon px-2.5 py-1 rounded-md text-xs border border-brand-purple/30 group">
+                                                    <span>{t}</span>
+                                                    <button
+                                                        className="hover:text-white transition-colors focus:outline-none"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedTopics(prev => prev.filter(item => item !== t));
+                                                        }}
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <button className="text-slate-400 p-1">
+                                            <ChevronDown className={`w-4 h-4 transition-transform ${isTopicDropdownOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {/* Dropdown Menu */}
+                                        {isTopicDropdownOpen && (
+                                            <div className="absolute top-[calc(100%+8px)] left-0 w-full bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden py-2 max-h-60 overflow-y-auto">
+                                                {availableTopics.filter(t => !selectedTopics.includes(t)).map(topicOption => (
+                                                    <div
+                                                        key={topicOption}
+                                                        className="px-4 py-2 hover:bg-brand-purple/20 hover:text-brand-neon cursor-pointer text-sm text-slate-300 transition-colors"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (!selectedTopics.includes(topicOption)) {
+                                                                setSelectedTopics(prev => [...prev, topicOption]);
+                                                            }
+                                                            setIsTopicDropdownOpen(false);
+                                                        }}
+                                                    >
+                                                        {topicOption}
+                                                    </div>
+                                                ))}
+                                                {availableTopics.filter(t => !selectedTopics.includes(t)).length === 0 && (
+                                                    <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                                                        All available topics selected
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Overlay to close dropdown when clicking outside */}
+                                    {isTopicDropdownOpen && (
+                                        <div
+                                            className="fixed inset-0 z-40 bg-transparent"
+                                            onClick={() => setIsTopicDropdownOpen(false)}
+                                        />
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">

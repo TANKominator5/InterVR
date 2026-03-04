@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { ArrowRight, Bot, Glasses, Activity, Zap, PlayCircle } from "lucide-react";
+import { createClient } from "@/utils/supabase/server";
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
@@ -26,7 +30,7 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="/signup"
+              href={user ? "/dashboard" : "/signup"}
               className="group relative inline-flex items-center justify-center px-8 py-4 font-bold text-white transition-all duration-200 bg-brand-purple font-pj rounded-xl hover:bg-brand-purple-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-purple overflow-hidden"
             >
               <div className="absolute inset-0 w-full h-full -mt-1 rounded-lg opacity-30 bg-gradient-to-b from-transparent via-transparent to-black" />
