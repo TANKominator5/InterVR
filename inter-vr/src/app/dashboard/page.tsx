@@ -26,37 +26,87 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
-// Dummy Data to mock Supabase connection for now
-const userStats = {
-    name: "Alex Developer",
-    targetRole: "Next.js Fullstack Engineer",
-    confidenceScore: 82,
-    gazeScore: 94,
-    streak: 3,
-    totalMocks: 5,
-    config: {
-        persona: "The Strict Manager",
-        techStack: "MERN",
-        resume: "attached"
-    }
-};
-
-const recentInterviews = [
-    { id: 1, date: "Oct 12, 2026", type: "System Design", persona: "Strict", score: "88%", status: "completed" },
-    { id: 2, date: "Oct 10, 2026", type: "Behavioral", persona: "Casual", score: "92%", status: "completed" },
-    { id: 3, date: "Oct 05, 2026", type: "React Frontend", persona: "Friendly", score: "78%", status: "completed" },
-];
-
 export default function DashboardPage() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
-    const [topic, setTopic] = useState("Next.js");
-    const [difficulty, setDifficulty] = useState("Medium");
+    const [topic, setTopic] = useState("Next.js & React");
+    const [difficulty, setDifficulty] = useState("Medium (Junior/Mid)");
     const [duration, setDuration] = useState("Short (15m)");
     const [tone, setTone] = useState("Strict");
     const [isStarting, setIsStarting] = useState(false);
 
+    // Dynamic State Data
+    const [userData, setUserData] = useState<any>(null);
+    const [recentInterviews, setRecentInterviews] = useState<any[]>([]);
+    const [totalMocks, setTotalMocks] = useState(0);
+    const [averageScore, setAverageScore] = useState(0);
+    const [isLoadingData, setIsLoadingData] = useState(true);
+
     const router = useRouter();
     const supabase = createClient();
+
+    // Fetch user details and past interviews
+    useEffect(() => {
+        let mounted = true;
+        const fetchData = async () => {
+            setIsLoadingData(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            // 1. Fetch user profile
+            const { data: profile } = await supabase
+                .from("users")
+                .select("*")
+                .eq("id", user.id)
+                .single();
+
+            if (mounted) setUserData(profile);
+
+            // 2. Fetch completed sessions & reports
+            // Using a left join via Supabase conventions
+            const { data: sessions } = await supabase
+                .from("interview_sessions")
+                .select(`
+                    id,
+                    topic,
+                    tone,
+                    status,
+                    created_at,
+                    interview_reports(id, overall_score)
+                `)
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false });
+
+            if (sessions && mounted) {
+                const formatted = sessions.map((s: any) => {
+                    const report = s.interview_reports?.[0]; // One report per session
+                    return {
+                        id: s.id,
+                        date: new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+                        type: s.topic,
+                        persona: s.tone,
+                        score: report?.overall_score ? `${report.overall_score}%` : (s.status === "completed" ? "Calculating..." : "-"),
+                        rawScore: report?.overall_score || 0,
+                        status: s.status,
+                        reportId: report?.id || null
+                    };
+                });
+
+                setRecentInterviews(formatted);
+
+                // Calculate total completed mocks and average score
+                const completed = formatted.filter(f => f.status === "completed" && f.rawScore > 0);
+                setTotalMocks(completed.length);
+                if (completed.length > 0) {
+                    const avg = completed.reduce((acc, curr) => acc + curr.rawScore, 0) / completed.length;
+                    setAverageScore(Math.round(avg));
+                }
+            }
+            if (mounted) setIsLoadingData(false);
+        };
+
+        fetchData();
+        return () => { mounted = false; };
+    }, []);
 
     const startSimulation = async () => {
         setIsStarting(true);
@@ -136,7 +186,7 @@ export default function DashboardPage() {
                 if (mounted) setCamStatus('error');
             }
 
-            // Simulate Ping / Network check (we can't easily ping from browser JS without a dedicated endpoint)
+            // Simulate Ping / Network check
             setTimeout(() => {
                 if (mounted) {
                     const fakePing = Math.floor(Math.random() * 30) + 15; // 15ms - 45ms
@@ -149,6 +199,11 @@ export default function DashboardPage() {
 
         return () => { mounted = false; };
     }, []);
+
+    const userFirstName = userData?.full_name?.split(' ')[0] || "Guest";
+    const userRole = userData?.tech_stack || "Candidate";
+    const userInitial = userData?.full_name?.charAt(0) || "G";
+    const hasResume = !!userData?.processed_resume;
 
     return (
         <div className="flex min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-brand-purple/30">
@@ -213,16 +268,16 @@ export default function DashboardPage() {
                             <Menu className="h-6 w-6" />
                         </button>
                         <div>
-                            <h1 className="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 antialiased">Welcome back, {userStats.name.split(' ')[0]}</h1>
+                            <h1 className="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 antialiased">Welcome back, {userFirstName}</h1>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="hidden md:flex flex-col items-end">
-                            <span className="text-sm font-medium text-slate-200">{userStats.name}</span>
-                            <span className="text-xs text-brand-neon">{userStats.targetRole}</span>
+                            <span className="text-sm font-medium text-slate-200">{userData?.full_name || "Guest"}</span>
+                            <span className="text-xs text-brand-neon">{userRole}</span>
                         </div>
                         <div className="h-10 w-10 rounded-full bg-slate-800 border-2 border-brand-purple flex items-center justify-center font-bold text-brand-neon">
-                            {userStats.name.charAt(0)}
+                            {userInitial}
                         </div>
                     </div>
                 </header>
@@ -239,9 +294,11 @@ export default function DashboardPage() {
                             <CardDescription className="text-base text-slate-400">Configure your simulation parameters. The AI will adapt dynamically to your answers.</CardDescription>
 
                             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-4">
-                                <Badge variant="purple" className="flex items-center gap-1.5 px-3 py-1"><UserIcon className="w-3 h-3" /> {userStats.config.persona}</Badge>
-                                <Badge variant="neon" className="flex items-center gap-1.5 px-3 py-1"><Brain className="w-3 h-3" /> Tech: {userStats.config.techStack}</Badge>
-                                <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 bg-slate-800/50"><FileText className="w-3 h-3" /> Resume: {userStats.config.resume}</Badge>
+                                <Badge variant="purple" className="flex items-center gap-1.5 px-3 py-1"><UserIcon className="w-3 h-3" /> Interview Profile Ready</Badge>
+                                <Badge variant="neon" className="flex items-center gap-1.5 px-3 py-1"><Brain className="w-3 h-3" /> Tech: {userRole}</Badge>
+                                <Badge variant="outline" className={`flex items-center gap-1.5 px-3 py-1 ${hasResume ? 'bg-slate-800/50' : 'bg-red-900/20 text-red-400 border-red-800/50'}`}>
+                                    <FileText className="w-3 h-3" /> Resume: {hasResume ? "Attached" : "Missing"}
+                                </Badge>
                             </div>
                         </CardHeader>
 
@@ -258,6 +315,7 @@ export default function DashboardPage() {
                                         <option>PostgreSQL</option>
                                         <option>Docker & K8s</option>
                                         <option>System Design</option>
+                                        <option>Behavioral</option>
                                     </select>
                                 </div>
 
@@ -348,55 +406,68 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Dummy Statistics & Analytics Grid */}
+                    {/* Analytics Grid */}
                     <div>
-                        <h3 className="text-lg font-bold mb-4 tracking-tight">Behavioral & Anti-Cheating Analytics</h3>
+                        <h3 className="text-lg font-bold mb-4 tracking-tight">Your Performance Analytics</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-                            <Card className="bg-slate-900/40 border-slate-800">
+                            <Card className="bg-slate-900/40 border-slate-800 relative overflow-hidden">
+                                {isLoadingData && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
-                                        Confidence Score
+                                        Avg. Interview Score
                                         <Brain className="w-4 h-4 text-brand-purple" />
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-3xl font-bold text-white">{userStats.confidenceScore}%</div>
-                                    <Progress value={userStats.confidenceScore} className="mt-3 bg-slate-800" />
-                                    <p className="text-[10px] text-slate-500 mt-3 leading-tight">Based on voice modulation and sentiment analysis.</p>
+                                    <div className="text-3xl font-bold text-white">{averageScore}%</div>
+                                    <Progress value={averageScore} className="mt-3 bg-slate-800" />
+                                    <p className="text-[10px] text-slate-500 mt-3 leading-tight">Average from your completed technical & behavioral mocks.</p>
                                 </CardContent>
                             </Card>
 
-                            <Card className="bg-slate-900/40 border-slate-800">
+                            <Card className="bg-slate-900/40 border-slate-800 relative overflow-hidden">
+                                {isLoadingData && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
-                                        Focus / Gaze Score
-                                        <Eye className="w-4 h-4 text-brand-neon" />
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-3xl font-bold text-white">{userStats.gazeScore}%</div>
-                                    <Progress value={userStats.gazeScore} className="mt-3 bg-slate-800 [&>div]:bg-brand-neon" />
-                                    <p className="text-[10px] text-slate-500 mt-3 leading-tight">Eye contact and attention tracking.</p>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="bg-slate-900/40 border-slate-800">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
-                                        Interview Streak
+                                        Preparation Activity
                                         <Flame className="w-4 h-4 text-orange-500" />
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="text-3xl font-bold text-white flex items-center gap-2">
-                                        <span className="text-orange-500">🔥</span> {userStats.streak} Days
+                                        <span className="text-orange-500">🔥</span> Active
                                     </div>
-                                    <p className="text-xs text-slate-400 mt-3">You're doing great! Keep practicing.</p>
+                                    <p className="text-xs text-slate-400 mt-3">You've practiced recently. Keep up the momentum!</p>
                                 </CardContent>
                             </Card>
 
-                            <Card className="bg-slate-900/40 border-slate-800">
+                            <Card className="bg-slate-900/40 border-slate-800 relative overflow-hidden">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
+                                        Resume Status
+                                        <FileText className="w-4 h-4 text-brand-neon" />
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {isLoadingData ? (
+                                        <div className="text-2xl font-bold text-slate-600">...</div>
+                                    ) : hasResume ? (
+                                        <>
+                                            <div className="text-2xl font-bold text-brand-neon">Parsed & Ready</div>
+                                            <p className="text-[10px] text-slate-500 mt-3 leading-tight">AI will tailor questions based on your background.</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="text-2xl font-bold text-red-400">Not Uploaded</div>
+                                            <button onClick={() => router.push('/profile')} className="text-xs text-brand-purple mt-3 hover:underline">Upload Resume →</button>
+                                        </>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card className="bg-slate-900/40 border-slate-800 relative overflow-hidden">
+                                {isLoadingData && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
                                         Mocks Completed
@@ -404,8 +475,8 @@ export default function DashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-3xl font-bold text-white">{userStats.totalMocks}</div>
-                                    <p className="text-xs text-slate-400 mt-3">Total full-length interviews completed.</p>
+                                    <div className="text-3xl font-bold text-white">{totalMocks}</div>
+                                    <p className="text-xs text-slate-400 mt-3">Total full-length interviews completed and graded.</p>
                                 </CardContent>
                             </Card>
 
@@ -415,7 +486,13 @@ export default function DashboardPage() {
                     {/* Recent Interviews List */}
                     <div>
                         <h3 className="text-lg font-bold mb-4 tracking-tight">Recent Sessions</h3>
-                        <Card className="bg-slate-900/40 border-slate-800 overflow-hidden">
+                        <Card className="bg-slate-900/40 border-slate-800 overflow-hidden relative min-h-[150px]">
+                            {isLoadingData && (
+                                <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
+                                    <div className="w-8 h-8 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div>
+                                    <span className="text-sm text-slate-400">Loading history...</span>
+                                </div>
+                            )}
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left">
                                     <thead className="text-xs text-slate-400 uppercase bg-slate-950/50 border-b border-slate-800">
@@ -428,7 +505,7 @@ export default function DashboardPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {recentInterviews.map((interview) => (
+                                        {!isLoadingData && recentInterviews.map((interview) => (
                                             <tr key={interview.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
                                                 <td className="px-6 py-4 text-slate-300 font-medium whitespace-nowrap">{interview.date}</td>
                                                 <td className="px-6 py-4 text-slate-400">{interview.type}</td>
@@ -438,19 +515,34 @@ export default function DashboardPage() {
                                                     </Badge>
                                                 </td>
                                                 <td className="px-6 py-4 font-bold text-center">
-                                                    <span className={parseInt(interview.score) > 85 ? "text-emerald-400" : "text-brand-purple"}>{interview.score}</span>
+                                                    {interview.status === "completed" ? (
+                                                        <span className={interview.rawScore > 85 ? "text-emerald-400" : "text-brand-purple"}>{interview.score}</span>
+                                                    ) : (
+                                                        <Badge variant="outline" className="text-yellow-500/80 border-yellow-500/30">Incomplete</Badge>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <Button variant="secondary" size="sm" className="h-8 shadow-sm">
-                                                        View Report
-                                                    </Button>
+                                                    {interview.status === "completed" && interview.reportId ? (
+                                                        <Button variant="secondary" size="sm" className="h-8 shadow-sm" onClick={() => router.push(`/report/${interview.reportId}`)}>
+                                                            View Report
+                                                        </Button>
+                                                    ) : (
+                                                        <Button variant="outline" size="sm" className="h-8 shadow-sm border-slate-700 text-slate-400 hover:text-white" onClick={() => router.push(`/interview/${interview.id}`)}>
+                                                            Resume/Retry
+                                                        </Button>
+                                                    )}
+
                                                 </td>
                                             </tr>
                                         ))}
-                                        {recentInterviews.length === 0 && (
+                                        {!isLoadingData && recentInterviews.length === 0 && (
                                             <tr>
-                                                <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                                                    No interviews completed yet. Start your first mock today!
+                                                <td colSpan={5} className="px-6 py-12 text-center">
+                                                    <div className="flex flex-col items-center justify-center gap-2">
+                                                        <History className="w-8 h-8 text-slate-700" />
+                                                        <p className="text-slate-400 font-medium">No interviews completed yet.</p>
+                                                        <p className="text-slate-500 text-xs text-balance">When you complete your first mock interview, your details and report will show up here.</p>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )}
