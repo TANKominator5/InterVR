@@ -44,6 +44,7 @@ Return this exact JSON structure:
   "accuracy_score": <0-10>,
   "depth_score": <0-10>,
   "communication_score": <0-10>,
+  "confidence_score": <0-10>,
   "overall_score": <0-10>,
   "feedback": "<specific constructive feedback>",
   "needs_followup": <true/false>,
