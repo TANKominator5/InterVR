@@ -16,7 +16,10 @@ import {
   Clock,
   BarChart2,
   Trophy,
+  Activity,
+  AlertTriangle,
 } from "lucide-react";
+import useVideoAntiCheat from "@/hooks/useVideoAntiCheat";
 
 type InterviewPhase =
   | "loading" // Fetching session
@@ -80,6 +83,16 @@ export default function InterviewRoomPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const antiCheatVideoRef = useRef<HTMLVideoElement>(null);
+
+  // ── Video Anti-Cheat ───────────────────────────────────────────────────────
+  const [webcamEnabled, setWebcamEnabled] = useState(false);
+  const [webcamError, setWebcamError] = useState("");
+
+  const antiCheatStatus = useVideoAntiCheat(
+    antiCheatVideoRef,
+    webcamEnabled && phase !== "completed" && phase !== "error",
+  );
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -139,9 +152,137 @@ export default function InterviewRoomPage() {
       setCurrentQuestion(sess.questions[0]);
       setUserContext(ctx);
       setPhase("ready");
+
+      // Start the webcam for anti-cheat
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: "user" },
+        });
+        if (antiCheatVideoRef.current) {
+          antiCheatVideoRef.current.srcObject = stream;
+        }
+        setWebcamEnabled(true);
+      } catch (err) {
+        console.warn("Could not start webcam for anti-cheat:", err);
+        setWebcamError("Camera access required for anti-cheat.");
+      }
     };
     load();
-  }, [sessionId]);
+  }, [sessionId, supabase]);
+
+  // ── Anti-Cheat Periodic Reporting ──────────────────────────────────────────
+  useEffect(() => {
+    // Only report when actively testing/interviewing
+    if (
+      phase === "loading" ||
+      phase === "ready" ||
+      phase === "completed" ||
+      phase === "error"
+    ) {
+      return;
+    }
+
+    // Interval to sporadically report flagged state to server
+    const interval = setInterval(() => {
+      // If they are flagged (looking away or looking off center), POST to server
+      if (antiCheatStatus.isFlagged && session?.id) {
+        fetch("/api/video-anti-cheat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: session.id,
+            timestamp: Date.now(),
+            yaw: antiCheatStatus.yaw,
+            pitch: antiCheatStatus.pitch,
+            gazeX: antiCheatStatus.gazeX,
+            gazeY: antiCheatStatus.gazeY,
+            isFlagged: antiCheatStatus.isFlagged,
+          }),
+        }).catch((err) =>
+          console.error("Failed to report anti-cheat event", err),
+        );
+      }
+    }, 5000); // Check every 5s
+
+    return () => clearInterval(interval);
+  }, [antiCheatStatus, phase, session?.id]);
+
+  // ── Anti-Cheat Chime Audio ─────────────────────────────────────────────────
+  useEffect(() => {
+    // Only play chime when actively flagged and not completed
+    if (
+      !antiCheatStatus.isFlagged ||
+      phase === "completed" ||
+      phase === "error"
+    ) {
+      return;
+    }
+
+    let audioCtx: AudioContext | null = null;
+    let osc: OscillatorNode | null = null;
+    let gainNode: GainNode | null = null;
+    let active = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    try {
+      audioCtx = new (
+        window.AudioContext || (window as any).webkitAudioContext
+      )();
+    } catch (e) {
+      console.warn("Web Audio API not supported", e);
+      return;
+    }
+
+    const playChime = () => {
+      if (!active || !audioCtx) return;
+
+      osc = audioCtx.createOscillator();
+      gainNode = audioCtx.createGain();
+
+      // Warning tone parameters (two-tone dissonant alert)
+      osc.type = "square";
+      osc.frequency.setValueAtTime(400, audioCtx.currentTime); // start at 400Hz
+      osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.1); // ramp to 600Hz
+
+      // Envelope to make it a distinct "beep"
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.05); // low volume (0.1) so it doesn't blast
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.001,
+        audioCtx.currentTime + 0.3,
+      );
+
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+
+      // Repeat chime every 500ms while flagged
+      timeoutId = setTimeout(playChime, 500);
+    };
+
+    // Ensure audio context is resumed (browsers require user interaction,
+    // but the interview start button provides this)
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume().then(playChime);
+    } else {
+      playChime();
+    }
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+      if (osc) {
+        try {
+          osc.stop();
+        } catch (e) {}
+      }
+      if (audioCtx) {
+        audioCtx.close();
+      }
+    };
+  }, [antiCheatStatus.isFlagged, phase]);
 
   // ── TTS: Speak text (browser-native, instant) ───────────────────────────────
   const speak = useCallback(async (text: string): Promise<void> => {
@@ -255,7 +396,8 @@ export default function InterviewRoomPage() {
 
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        streamRef.current?.getTracks().forEach((t) => t.stop());
+        // NOTE: We only stop audio tracks here now, because we want the video feed to stay alive for anti-cheat
+        streamRef.current?.getAudioTracks().forEach((t) => t.stop());
         resolve(blob);
       };
       recorder.stop();
@@ -489,6 +631,64 @@ export default function InterviewRoomPage() {
               <span className="font-bold">{avgScore}%</span>
             </div>
           )}
+
+          {/* Anti-Cheat Overlay */}
+          <div className="flex items-center gap-4 border-l border-slate-700 pl-4 ml-2">
+            <div className="relative">
+              <video
+                ref={antiCheatVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-24 h-16 rounded-lg object-cover bg-slate-900 border border-slate-800 shadow-inner"
+              />
+              {!antiCheatStatus.isReady && webcamEnabled && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-lg">
+                  <Loader2 className="w-5 h-5 text-brand-purple animate-spin" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1 w-32 border border-slate-700/50 bg-slate-900/40 p-2 rounded relative overflow-hidden">
+              {antiCheatStatus.isFlagged && (
+                <div className="absolute inset-0 bg-red-500/10 animate-pulse pointer-events-none" />
+              )}
+              <div className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-slate-400">YAW</span>
+                <span
+                  className={
+                    Math.abs(antiCheatStatus.yaw) > 15
+                      ? "text-red-400 font-bold"
+                      : "text-slate-300"
+                  }
+                >
+                  {antiCheatStatus.yaw.toFixed(0)}°
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-slate-400">PITCH</span>
+                <span
+                  className={
+                    Math.abs(antiCheatStatus.pitch) > 12
+                      ? "text-red-400 font-bold"
+                      : "text-slate-300"
+                  }
+                >
+                  {antiCheatStatus.pitch.toFixed(0)}°
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono mt-0.5 pt-0.5 border-t border-slate-700">
+                <span className="text-slate-400 flex items-center gap-1">
+                  <Activity className="w-3 h-3" /> GAZE
+                </span>
+                {antiCheatStatus.isGazeOffCenter ? (
+                  <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
+                ) : (
+                  <span className="text-brand-neon/80">OK</span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
