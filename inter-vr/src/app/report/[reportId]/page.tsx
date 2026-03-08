@@ -21,6 +21,12 @@ export default function ReportPage() {
 
     useEffect(() => {
         const load = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                router.push("/login");
+                return;
+            }
+
             const { data: rep } = await supabase
                 .from("interview_reports")
                 .select("*, interview_sessions(*)")

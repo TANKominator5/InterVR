@@ -9,8 +9,31 @@ const google = createGoogleGenerativeAI({
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId } = await request.json();
+    // Verify user owns this session
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const supabase = createAdminClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { sessionId } = await request.json();
+
+    // Verify session belongs to user
+    const { data: sessionCheck } = await supabase
+      .from("interview_sessions")
+      .select("user_id")
+      .eq("id", sessionId)
+      .single();
+
+    if (!sessionCheck || sessionCheck.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     const { data: session } = await supabase
       .from("interview_sessions")
@@ -85,20 +108,20 @@ Return this exact JSON:
       answer_transcript: q.answer_transcript,
       score: q.grading
         ? {
-            accuracy: q.grading.accuracy_score,
-            depth: q.grading.depth_score,
-            communication: q.grading.communication_score,
-          }
+          accuracy: q.grading.accuracy_score,
+          depth: q.grading.depth_score,
+          communication: q.grading.communication_score,
+        }
         : null,
       feedback: q.grading?.feedback,
     }));
 
     const durationMinutes = session.completed_at
       ? Math.round(
-          (new Date(session.completed_at).getTime() -
-            new Date(session.created_at).getTime()) /
-            60000,
-        )
+        (new Date(session.completed_at).getTime() -
+          new Date(session.created_at).getTime()) /
+        60000,
+      )
       : 0;
 
     const { data: report, error: reportError } = await supabase

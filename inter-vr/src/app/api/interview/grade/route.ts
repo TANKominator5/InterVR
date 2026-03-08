@@ -9,8 +9,32 @@ const google = createGoogleGenerativeAI({
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify user owns this session
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabaseAuth = createAdminClient();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { sessionId, questionIndex, question, answer, userContext } =
       await request.json();
+
+    // Verify session belongs to user
+    const { data: sessionCheck } = await supabaseAuth
+      .from("interview_sessions")
+      .select("user_id")
+      .eq("id", sessionId)
+      .single();
+
+    if (!sessionCheck || sessionCheck.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     if (!question || !answer) {
       return NextResponse.json(

@@ -55,8 +55,20 @@ export async function POST(request: NextRequest) {
             .update({ resume_processing_status: "processing" })
             .eq("id", userId);
 
-        // 2. Download the PDF from the URL
-        const pdfResponse = await fetch(resumeUrl);
+        // 2. Download the PDF using a signed URL (bucket is private)
+        const urlParts = resumeUrl.split("/resumes/");
+        const storagePath = urlParts[1];
+
+        const { data: signedData, error: signedError } = await supabase
+            .storage
+            .from("resumes")
+            .createSignedUrl(storagePath, 60); // 60 second expiry
+
+        if (signedError || !signedData?.signedUrl) {
+            throw new Error("Could not generate signed URL for resume");
+        }
+
+        const pdfResponse = await fetch(signedData.signedUrl);
         if (!pdfResponse.ok) {
             throw new Error(`Failed to download PDF: ${pdfResponse.status}`);
         }

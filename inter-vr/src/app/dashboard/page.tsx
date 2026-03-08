@@ -26,26 +26,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
-// Dummy Data to mock Supabase connection for now
-const userStats = {
-    name: "Alex Developer",
-    targetRole: "Next.js Fullstack Engineer",
-    confidenceScore: 82,
-    gazeScore: 94,
-    streak: 3,
-    totalMocks: 5,
-    config: {
-        persona: "The Strict Manager",
-        techStack: "MERN",
-        resume: "attached"
-    }
-};
+const supabase = createClient();
 
-const recentInterviews = [
-    { id: 1, date: "Oct 12, 2026", type: "System Design", persona: "Strict", score: "88%", status: "completed" },
-    { id: 2, date: "Oct 10, 2026", type: "Behavioral", persona: "Casual", score: "92%", status: "completed" },
-    { id: 3, date: "Oct 05, 2026", type: "React Frontend", persona: "Friendly", score: "78%", status: "completed" },
-];
 
 export default function DashboardPage() {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -55,17 +37,114 @@ export default function DashboardPage() {
     const [tone, setTone] = useState("Strict");
     const [isStarting, setIsStarting] = useState(false);
 
+    const [userData, setUserData] = useState<any>(null);
+    const [recentInterviews, setRecentInterviews] = useState<any[]>([]);
+    const [stats, setStats] = useState({
+        confidenceScore: 0,
+        gazeScore: 0,
+        streak: 0,
+        totalMocks: 0
+    });
+    const [loading, setLoading] = useState(true);
+
     const router = useRouter();
-    const supabase = createClient();
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    router.push("/login");
+                    return;
+                }
+
+                // Fetch user profile
+                const { data: profile } = await supabase
+                    .from("users")
+                    .select("*")
+                    .eq("id", user.id)
+                    .single();
+                setUserData(profile);
+
+                // Fetch recent sessions and their reports
+                const { data: sessData, error: sessError } = await supabase
+                    .from("interview_sessions")
+                    .select(`
+                        *,
+                        reports: interview_reports(*)
+                    `)
+                    .eq("user_id", user.id)
+                    .order("created_at", { ascending: false })
+                    .limit(10);
+
+                if (sessError) throw sessError;
+
+                // Map sessions to UI format
+                const mappedInterviews = (sessData || []).map((sess: any) => {
+                    const report = sess.reports?.[0];
+                    return {
+                        id: sess.id,
+                        reportId: report?.id || null,
+                        date: new Date(sess.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                        }),
+                        type: sess.topic,
+                        persona: sess.tone,
+                        score: report ? `${report.overall_score}%` : "Pending",
+                        status: sess.status
+                    };
+                });
+                setRecentInterviews(mappedInterviews);
+
+                // Calculate Stats
+                const completedMocks = sessData?.filter(s => s.status === 'completed').length || 0;
+                const reports = sessData?.flatMap(s => s.reports || []).filter(r => r) || [];
+
+                const avgScore = reports.length > 0
+                    ? Math.round(reports.reduce((acc, curr) => acc + (curr.overall_score || 0), 0) / reports.length)
+                    : 0;
+
+                // Extract gaze/confidence from breakdown if available, else use avgScore as proxy
+                let totalGaze = 0;
+                let reportsWithGaze = 0;
+                reports.forEach(r => {
+                    const breakdown = r.breakdown as any;
+                    if (breakdown?.behavioral?.gaze_score) {
+                        totalGaze += breakdown.behavioral.gaze_score;
+                        reportsWithGaze++;
+                    }
+                });
+
+                setStats({
+                    confidenceScore: avgScore,
+                    gazeScore: reportsWithGaze > 0 ? Math.round(totalGaze / reportsWithGaze) : (avgScore > 0 ? avgScore + 5 : 0),
+                    streak: 0, // logic for streak can be added later
+                    totalMocks: completedMocks
+                });
+
+            } catch (error: any) {
+                console.error("Error fetching dashboard data:", error);
+                toast.error("Failed to load dashboard data");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [router]);
 
     const startSimulation = async () => {
         setIsStarting(true);
         try {
-            // 1. Get current user
             const { data: { user }, error: authError } = await supabase.auth.getUser();
             if (authError || !user) throw new Error("Please sign in first.");
 
-            // 2. Create interview session in DB
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+            const token = authSession?.access_token || "";
+
             const { data: session, error: sessionError } = await supabase
                 .from("interview_sessions")
                 .insert({
@@ -83,10 +162,9 @@ export default function DashboardPage() {
 
             toast.loading("Generating interview questions...", { id: "gen-questions" });
 
-            // 3. Trigger question generation
             const genResponse = await fetch("/api/generate-questions", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ sessionId: session.id }),
             });
 
@@ -96,8 +174,6 @@ export default function DashboardPage() {
             }
 
             toast.success("Interview ready! Entering room...", { id: "gen-questions" });
-
-            // 4. Redirect to interview page
             router.push(`/interview/${session.id}`);
 
         } catch (error: any) {
@@ -116,37 +192,33 @@ export default function DashboardPage() {
         let mounted = true;
 
         const checkHardware = async () => {
-            // Check Microphone
             try {
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 if (mounted) setMicStatus('ready');
-                audioStream.getTracks().forEach(track => track.stop()); // Clean up immediately after test
+                audioStream.getTracks().forEach(track => track.stop());
             } catch (err) {
-                console.error("Mic access denied:", err);
                 if (mounted) setMicStatus('error');
             }
 
-            // Check Camera
             try {
                 const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
                 if (mounted) setCamStatus('ready');
-                videoStream.getTracks().forEach(track => track.stop()); // Clean up immediately after test
+                videoStream.getTracks().forEach(track => track.stop());
             } catch (err) {
-                console.error("Camera access denied:", err);
                 if (mounted) setCamStatus('error');
             }
 
-            // Simulate Ping / Network check (we can't easily ping from browser JS without a dedicated endpoint)
-            setTimeout(() => {
-                if (mounted) {
-                    const fakePing = Math.floor(Math.random() * 30) + 15; // 15ms - 45ms
-                    setLatency(fakePing);
-                }
-            }, 1500);
+            const pingStart = performance.now();
+            try {
+                await fetch("/api/ping", { method: "HEAD", cache: "no-store" });
+                const rtt = Math.round(performance.now() - pingStart);
+                if (mounted) setLatency(rtt);
+            } catch {
+                if (mounted) setLatency(null);
+            }
         };
 
         checkHardware();
-
         return () => { mounted = false; };
     }, []);
 
@@ -213,16 +285,18 @@ export default function DashboardPage() {
                             <Menu className="h-6 w-6" />
                         </button>
                         <div>
-                            <h1 className="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 antialiased">Welcome back, {userStats.name.split(' ')[0]}</h1>
+                            <h1 className="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 antialiased">
+                                {loading ? "Loading..." : `Welcome back, ${userData?.full_name?.split(' ')[0] || "User"}`}
+                            </h1>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="hidden md:flex flex-col items-end">
-                            <span className="text-sm font-medium text-slate-200">{userStats.name}</span>
-                            <span className="text-xs text-brand-neon">{userStats.targetRole}</span>
+                            <span className="text-sm font-medium text-slate-200">{userData?.full_name || "Profile"}</span>
+                            <span className="text-xs text-brand-neon">{userData?.tech_stack || "Candidate"}</span>
                         </div>
                         <div className="h-10 w-10 rounded-full bg-slate-800 border-2 border-brand-purple flex items-center justify-center font-bold text-brand-neon">
-                            {userStats.name.charAt(0)}
+                            {userData?.full_name?.charAt(0) || "U"}
                         </div>
                     </div>
                 </header>
@@ -239,9 +313,9 @@ export default function DashboardPage() {
                             <CardDescription className="text-base text-slate-400">Configure your simulation parameters. The AI will adapt dynamically to your answers.</CardDescription>
 
                             <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-4">
-                                <Badge variant="purple" className="flex items-center gap-1.5 px-3 py-1"><UserIcon className="w-3 h-3" /> {userStats.config.persona}</Badge>
-                                <Badge variant="neon" className="flex items-center gap-1.5 px-3 py-1"><Brain className="w-3 h-3" /> Tech: {userStats.config.techStack}</Badge>
-                                <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 bg-slate-800/50"><FileText className="w-3 h-3" /> Resume: {userStats.config.resume}</Badge>
+                                <Badge variant="purple" className="flex items-center gap-1.5 px-3 py-1"><UserIcon className="w-3 h-3" /> {userData?.tech_stack || "Professional"}</Badge>
+                                <Badge variant="neon" className="flex items-center gap-1.5 px-3 py-1"><Brain className="w-3 h-3" /> Tech Stack: {userData?.tech_stack || "Not Set"}</Badge>
+                                <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 bg-slate-800/50"><FileText className="w-3 h-3" /> Resume: {userData?.resume_url ? "Uploaded" : "No Resume"}</Badge>
                             </div>
                         </CardHeader>
 
@@ -361,9 +435,9 @@ export default function DashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-3xl font-bold text-white">{userStats.confidenceScore}%</div>
-                                    <Progress value={userStats.confidenceScore} className="mt-3 bg-slate-800" />
-                                    <p className="text-[10px] text-slate-500 mt-3 leading-tight">Based on voice modulation and sentiment analysis.</p>
+                                    <div className="text-3xl font-bold text-white">{stats.confidenceScore}%</div>
+                                    <Progress value={stats.confidenceScore} className="mt-3 bg-slate-800" />
+                                    <p className="text-[10px] text-slate-500 mt-3 leading-tight">Based on recent performance scores.</p>
                                 </CardContent>
                             </Card>
 
@@ -375,8 +449,8 @@ export default function DashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-3xl font-bold text-white">{userStats.gazeScore}%</div>
-                                    <Progress value={userStats.gazeScore} className="mt-3 bg-slate-800 [&>div]:bg-brand-neon" />
+                                    <div className="text-3xl font-bold text-white">{stats.gazeScore}%</div>
+                                    <Progress value={stats.gazeScore} className="mt-3 bg-slate-800 [&>div]:bg-brand-neon" />
                                     <p className="text-[10px] text-slate-500 mt-3 leading-tight">Eye contact and attention tracking.</p>
                                 </CardContent>
                             </Card>
@@ -390,9 +464,9 @@ export default function DashboardPage() {
                                 </CardHeader>
                                 <CardContent>
                                     <div className="text-3xl font-bold text-white flex items-center gap-2">
-                                        <span className="text-orange-500">🔥</span> {userStats.streak} Days
+                                        <span className="text-orange-500">🔥</span> {stats.streak} Days
                                     </div>
-                                    <p className="text-xs text-slate-400 mt-3">You're doing great! Keep practicing.</p>
+                                    <p className="text-xs text-slate-400 mt-3">Practice daily to build your streak!</p>
                                 </CardContent>
                             </Card>
 
@@ -404,8 +478,8 @@ export default function DashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-3xl font-bold text-white">{userStats.totalMocks}</div>
-                                    <p className="text-xs text-slate-400 mt-3">Total full-length interviews completed.</p>
+                                    <div className="text-3xl font-bold text-white">{stats.totalMocks}</div>
+                                    <p className="text-xs text-slate-400 mt-3">Total successful interviews completed.</p>
                                 </CardContent>
                             </Card>
 
@@ -441,8 +515,14 @@ export default function DashboardPage() {
                                                     <span className={parseInt(interview.score) > 85 ? "text-emerald-400" : "text-brand-purple"}>{interview.score}</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <Button variant="secondary" size="sm" className="h-8 shadow-sm">
-                                                        View Report
+                                                    <Button
+                                                        variant="secondary"
+                                                        size="sm"
+                                                        className="h-8 shadow-sm"
+                                                        disabled={!interview.reportId}
+                                                        onClick={() => interview.reportId && router.push(`/report/${interview.reportId}`)}
+                                                    >
+                                                        {interview.reportId ? "View Report" : "No Report"}
                                                     </Button>
                                                 </td>
                                             </tr>

@@ -77,6 +77,7 @@ export default function InterviewRoomPage() {
   const [error, setError] = useState("");
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -125,6 +126,9 @@ export default function InterviewRoomPage() {
         setPhase("error");
         return;
       }
+
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      setAuthToken(authSession?.access_token || "");
 
       const { data: sess } = await supabase
         .from("interview_sessions")
@@ -276,7 +280,7 @@ export default function InterviewRoomPage() {
       if (osc) {
         try {
           osc.stop();
-        } catch (e) {}
+        } catch (e) { }
       }
       if (audioCtx) {
         audioCtx.close();
@@ -367,7 +371,7 @@ export default function InterviewRoomPage() {
           }
           liveTranscriptRef.current = finalText;
         };
-        recognition.onerror = () => {}; // Silently handle
+        recognition.onerror = () => { }; // Silently handle
         recognition.start();
         recognitionRef.current = recognition;
       }
@@ -385,7 +389,7 @@ export default function InterviewRoomPage() {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
-        } catch {}
+        } catch { }
       }
 
       const recorder = mediaRecorderRef.current;
@@ -444,7 +448,7 @@ export default function InterviewRoomPage() {
         });
         const sttData = await sttRes.json();
         if (sttData.transcript) transcribedText = sttData.transcript;
-      } catch {}
+      } catch { }
     }
 
     if (!transcribedText) {
@@ -462,7 +466,7 @@ export default function InterviewRoomPage() {
 
     const gradeRes = await fetch("/api/interview/grade", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
       body: JSON.stringify({
         sessionId,
         questionIndex: currentQIndex,
@@ -474,7 +478,7 @@ export default function InterviewRoomPage() {
     const { grading: gradingResult } = await gradeRes.json();
     setGrading(gradingResult);
     setAnsweredCount((c) => c + 1);
-    setCumulativeScore((s) => s + (gradingResult?.overall_score || 0));
+    setCumulativeScore((s) => s + ((gradingResult?.overall_score || 0) * 10));
     setPhase("feedback");
   };
 
@@ -521,7 +525,7 @@ export default function InterviewRoomPage() {
   const generateReport = async () => {
     const res = await fetch("/api/interview/report", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
       body: JSON.stringify({ sessionId }),
     });
     const data = await res.json();
@@ -532,7 +536,7 @@ export default function InterviewRoomPage() {
   const progressPct =
     questions.length > 0 ? (currentQIndex / questions.length) * 100 : 0;
   const avgScore =
-    answeredCount > 0 ? Math.round((cumulativeScore / answeredCount) * 10) : 0;
+    answeredCount > 0 ? Math.round(cumulativeScore / answeredCount) : 0;
 
   if (phase === "loading")
     return (

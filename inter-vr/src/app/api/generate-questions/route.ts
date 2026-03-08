@@ -105,10 +105,34 @@ async function useGeminiFallback(prompt: string): Promise<any[]> {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify user owns this session
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabaseAuth = createAdminClient();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { sessionId } = await request.json();
 
     if (!sessionId) {
       return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
+    }
+
+    // Verify session belongs to user
+    const { data: sessionCheck } = await supabaseAuth
+      .from("interview_sessions")
+      .select("user_id")
+      .eq("id", sessionId)
+      .single();
+
+    if (!sessionCheck || sessionCheck.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const supabaseAdmin = createAdminClient();
@@ -188,7 +212,7 @@ export async function POST(request: NextRequest) {
           .update({ status: "failed" })
           .eq("id", body.sessionId);
       }
-    } catch {}
+    } catch { }
     return NextResponse.json(
       { error: error.message || "Failed to generate questions" },
       { status: 500 },
