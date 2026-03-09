@@ -189,6 +189,32 @@ export default function ReportPage() {
                                                 <p className="text-sm text-slate-300 leading-relaxed">{item.feedback}</p>
                                             </div>
                                         )}
+                                        {item.code_submission && (
+                                            <div className="mt-3">
+                                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                                                    Code Submission ({item.code_language})
+                                                </p>
+                                                <pre className="bg-slate-900 border border-slate-800 rounded-lg p-4 text-xs text-slate-300 overflow-x-auto font-mono">
+                                                    <code>{item.code_submission}</code>
+                                                </pre>
+                                                {item.code_analysis && (
+                                                    <div className="mt-3 grid grid-cols-2 gap-2">
+                                                        <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                                                            <div className="text-sm font-bold text-purple-400">
+                                                                {item.code_analysis.correctness_score}/10
+                                                            </div>
+                                                            <div className="text-xs text-slate-500">Correctness</div>
+                                                        </div>
+                                                        <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                                                            <div className="text-sm font-bold text-fuchsia-400">
+                                                                {item.code_analysis.time_complexity}
+                                                            </div>
+                                                            <div className="text-xs text-slate-500">Time Complexity</div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

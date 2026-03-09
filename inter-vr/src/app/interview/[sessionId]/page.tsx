@@ -20,6 +20,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import useVideoAntiCheat from "@/hooks/useVideoAntiCheat";
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
+import { motion, AnimatePresence } from "framer-motion";
+import CodeSandbox from "@/components/CodeSandbox";
+import type { CodeAnalysis } from "@/components/CodeSandbox";
 
 type InterviewPhase =
   | "loading" // Fetching session
@@ -78,6 +82,13 @@ export default function InterviewRoomPage() {
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState("");
+
+  // ── Code Sandbox State ──────────────────────────────────────────────────
+  const [codeAnalysis, setCodeAnalysis] = useState<CodeAnalysis | null>(null);
+  const [isAnalyzingCode, setIsAnalyzingCode] = useState(false);
+  const [codeCounterQuestion, setCodeCounterQuestion] = useState("");
+  const [isCodeCounterActive, setIsCodeCounterActive] = useState(false);
+  const [submittedCode, setSubmittedCode] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -501,6 +512,13 @@ export default function InterviewRoomPage() {
     setGrading(null);
     setTranscript("");
 
+    // Reset sandbox state
+    setCodeAnalysis(null);
+    setIsAnalyzingCode(false);
+    setCodeCounterQuestion("");
+    setIsCodeCounterActive(false);
+    setSubmittedCode("");
+
     const nextIndex = currentQIndex + 1;
 
     if (nextIndex >= questions.length) {
@@ -532,7 +550,78 @@ export default function InterviewRoomPage() {
     if (data.reportId) setReportId(data.reportId);
   };
 
+  // ── Code Sandbox Handler ──────────────────────────────────────────────────
+  const handleCodeSubmit = async (code: string, language: string) => {
+    setIsAnalyzingCode(true);
+    setSubmittedCode(code);
+
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const token = authSession?.access_token || "";
+
+      const res = await fetch("/api/interview/analyze-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          sessionId,
+          questionIndex: currentQIndex,
+          question: currentQuestion?.question,
+          code,
+          language,
+          userContext,
+          expectedAnswerOutline: currentQuestion?.expected_answer_outline,
+        }),
+      });
+
+      const data = await res.json();
+      setCodeAnalysis(data.analysis);
+
+      // Blended score: if verbal grading also exists, blend code + verbal scores
+      if (grading && data.analysis) {
+        const blendedScore = Math.round(
+          (grading.overall_score * 0.4) +
+          (data.analysis.correctness_score * 0.4) +
+          (data.analysis.quality_score * 0.2)
+        );
+        setCumulativeScore(prev =>
+          prev - (grading.overall_score * 10) + (blendedScore * 10)
+        );
+      }
+
+      // If AI generated a counter question, activate it
+      if (data.analysis?.has_counter_question && data.analysis?.counter_question) {
+        setCodeCounterQuestion(data.analysis.counter_question);
+        setIsCodeCounterActive(true);
+        await speak(`Interesting approach. Here is a follow-up: ${data.analysis.counter_question}`);
+      }
+    } catch (err) {
+      console.error("Code analysis failed:", err);
+    } finally {
+      setIsAnalyzingCode(false);
+    }
+  };
+
+  // ── Language helper ────────────────────────────────────────────────────────
+  function inferLanguageFromTopic(topic: string): string {
+    const t = topic.toLowerCase();
+    if (t.includes("python") || t.includes("django") || t.includes("flask"))
+      return "python";
+    if ((t.includes("java") && !t.includes("javascript")) || t.includes("spring"))
+      return "java";
+    if (t.includes("typescript") || t.includes("next") || t.includes("react"))
+      return "typescript";
+    if (t.includes("c++") || t.includes("cpp"))
+      return "cpp";
+    if (t.includes("go") || t.includes("golang"))
+      return "go";
+    return "javascript";
+  }
+
   // ── UI ─────────────────────────────────────────────────────────────────────
+  const isCodingQuestion = currentQuestion?.category === "coding";
   const progressPct =
     questions.length > 0 ? (currentQIndex / questions.length) * 100 : 0;
   const avgScore =
@@ -705,38 +794,12 @@ export default function InterviewRoomPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 max-w-3xl mx-auto w-full gap-8">
-        {/* Question Card */}
-        {phase === "ready" && (
-          <div className="text-center space-y-6">
-            <div className="w-20 h-20 rounded-full bg-brand-purple/20 flex items-center justify-center mx-auto border border-brand-purple/30">
-              <Brain className="w-10 h-10 text-brand-purple" />
-            </div>
-            <h2 className="text-2xl font-bold text-white">Ready to Begin?</h2>
-            <p className="text-slate-400">
-              {session?.topic} • {session?.difficulty} • {session?.duration}
-            </p>
-            <p className="text-slate-400 text-sm">
-              {questions.length} questions prepared. The AI interviewer will
-              speak each question aloud.
-            </p>
-            <button
-              onClick={startInterview}
-              className="px-10 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-2xl text-white font-bold text-lg hover:opacity-90 transition shadow-[0_0_30px_rgba(168,85,247,0.4)]"
-            >
-              Start Interview
-            </button>
-          </div>
-        )}
-
-        {(phase === "speaking" ||
-          phase === "listening" ||
-          phase === "recording" ||
-          phase === "processing" ||
-          phase === "feedback" ||
-          phase === "followup") &&
-          currentQuestion && (
-            <>
+      {isCodingQuestion && (phase === "speaking" || phase === "listening" || phase === "recording" || phase === "processing" || phase === "feedback" || phase === "followup") && currentQuestion ? (
+        /* ── Side-by-side layout for coding questions ──────────────── */
+        <PanelGroup orientation="horizontal" className="flex-1 flex min-h-0">
+          {/* LEFT PANEL — Question + voice controls */}
+          <Panel defaultSize="40%" minSize="30%">
+            <div className="h-full overflow-y-auto p-6 flex flex-col gap-6">
               {/* Question Display */}
               <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-3 backdrop-blur">
                 <div className="flex items-center gap-2">
@@ -755,46 +818,27 @@ export default function InterviewRoomPage() {
                 </p>
               </div>
 
-              {/* AI Speaking Indicator */}
               {phase === "speaking" && (
                 <div className="flex flex-col items-center gap-4">
                   <div className="flex items-center gap-2 px-5 py-3 bg-brand-purple/10 border border-brand-purple/30 rounded-full">
                     <Volume2 className="w-5 h-5 text-brand-purple animate-pulse" />
-                    <span className="text-brand-purple text-sm font-medium">
-                      AI Interviewer is speaking...
-                    </span>
+                    <span className="text-brand-purple text-sm font-medium">AI Interviewer is speaking...</span>
                   </div>
-                  {/* Audio wave animation */}
                   <div className="flex items-center gap-1">
                     {[1, 2, 3, 4, 5].map((i) => (
-                      <div
-                        key={i}
-                        className="w-1 bg-brand-purple rounded-full animate-bounce"
-                        style={{
-                          height: `${8 + (i % 3) * 8}px`,
-                          animationDelay: `${i * 0.1}s`,
-                        }}
-                      />
+                      <div key={i} className="w-1 bg-brand-purple rounded-full animate-bounce" style={{ height: `${8 + (i % 3) * 8}px`, animationDelay: `${i * 0.1}s` }} />
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Listening / Record Controls */}
               {phase === "listening" && (
                 <div className="flex flex-col items-center gap-5">
-                  <p className="text-slate-400 text-sm">
-                    Your turn to answer. Press the button to start recording.
-                  </p>
-                  <button
-                    onClick={startRecording}
-                    className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-purple to-brand-neon flex items-center justify-center shadow-[0_0_40px_rgba(168,85,247,0.5)] hover:shadow-[0_0_60px_rgba(217,70,239,0.7)] transition-all hover:scale-105"
-                  >
+                  <p className="text-slate-400 text-sm">Your turn to answer. Press the button to start recording.</p>
+                  <button onClick={startRecording} className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-purple to-brand-neon flex items-center justify-center shadow-[0_0_40px_rgba(168,85,247,0.5)] hover:shadow-[0_0_60px_rgba(217,70,239,0.7)] transition-all hover:scale-105">
                     <Mic className="w-8 h-8 text-white" />
                   </button>
-                  <p className="text-xs text-slate-600">
-                    Press & hold, or click to start
-                  </p>
+                  <p className="text-xs text-slate-600">Press & hold, or click to start</p>
                 </div>
               )}
 
@@ -802,26 +846,14 @@ export default function InterviewRoomPage() {
                 <div className="flex flex-col items-center gap-5">
                   <div className="flex items-center gap-2 text-red-400">
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-sm font-medium">
-                      Recording... speak your answer
-                    </span>
+                    <span className="text-sm font-medium">Recording... speak your answer</span>
                   </div>
                   <div className="flex items-center gap-1">
                     {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-                      <div
-                        key={i}
-                        className="w-1 bg-red-500 rounded-full animate-bounce"
-                        style={{
-                          height: `${6 + Math.sin(i) * 10 + 10}px`,
-                          animationDelay: `${i * 0.08}s`,
-                        }}
-                      />
+                      <div key={i} className="w-1 bg-red-500 rounded-full animate-bounce" style={{ height: `${6 + Math.sin(i) * 10 + 10}px`, animationDelay: `${i * 0.08}s` }} />
                     ))}
                   </div>
-                  <button
-                    onClick={submitAnswer}
-                    className="flex items-center gap-2 px-8 py-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 font-semibold hover:bg-red-500/30 transition"
-                  >
+                  <button onClick={submitAnswer} className="flex items-center gap-2 px-8 py-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 font-semibold hover:bg-red-500/30 transition">
                     <Square className="w-4 h-4 fill-current" />
                     Stop & Submit
                   </button>
@@ -832,88 +864,259 @@ export default function InterviewRoomPage() {
                 <div className="flex flex-col items-center gap-4">
                   <div className="flex items-center gap-3 px-6 py-3 bg-slate-900 border border-slate-700 rounded-xl">
                     <Loader2 className="w-5 h-5 text-brand-purple animate-spin" />
-                    <span className="text-slate-300 text-sm">
-                      Transcribing and grading your answer...
-                    </span>
+                    <span className="text-slate-300 text-sm">Transcribing and grading your answer...</span>
                   </div>
                 </div>
               )}
 
-              {/* Feedback Panel */}
               {phase === "feedback" && grading && (
                 <div className="w-full space-y-4">
-                  {/* Transcript */}
                   {transcript && (
                     <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-                      <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-semibold">
-                        Your Answer (Transcribed)
-                      </p>
-                      <p className="text-slate-300 text-sm leading-relaxed">
-                        {transcript}
-                      </p>
+                      <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-semibold">Your Answer (Transcribed)</p>
+                      <p className="text-slate-300 text-sm leading-relaxed">{transcript}</p>
                     </div>
                   )}
-
-                  {/* Scores */}
                   <div className="grid grid-cols-3 gap-3">
-                    {[
-                      {
-                        label: "Accuracy",
-                        value: grading.accuracy_score,
-                        color: "text-blue-400",
-                      },
-                      {
-                        label: "Depth",
-                        value: grading.depth_score,
-                        color: "text-brand-purple",
-                      },
-                      {
-                        label: "Communication",
-                        value: grading.communication_score,
-                        color: "text-brand-neon",
-                      },
-                    ].map(({ label, value, color }) => (
-                      <div
-                        key={label}
-                        className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center"
-                      >
-                        <div className={`text-2xl font-extrabold ${color}`}>
-                          {value}
-                          <span className="text-sm text-slate-500">/10</span>
-                        </div>
-                        <div className="text-xs text-slate-500 mt-1">
-                          {label}
-                        </div>
+                    {[{ label: "Accuracy", value: grading.accuracy_score, color: "text-blue-400" }, { label: "Depth", value: grading.depth_score, color: "text-brand-purple" }, { label: "Communication", value: grading.communication_score, color: "text-brand-neon" }].map(({ label, value, color }) => (
+                      <div key={label} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                        <div className={`text-2xl font-extrabold ${color}`}>{value}<span className="text-sm text-slate-500">/10</span></div>
+                        <div className="text-xs text-slate-500 mt-1">{label}</div>
                       </div>
                     ))}
                   </div>
-
-                  {/* Feedback */}
                   <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-                    <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">
-                      AI Feedback
-                    </p>
-                    <p className="text-slate-300 text-sm leading-relaxed">
-                      {grading.feedback}
-                    </p>
+                    <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">AI Feedback</p>
+                    <p className="text-slate-300 text-sm leading-relaxed">{grading.feedback}</p>
                   </div>
-
-                  <button
-                    onClick={proceedNext}
-                    className="w-full flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-xl text-white font-bold hover:opacity-90 transition"
-                  >
-                    {currentQIndex + 1 >= questions.length
-                      ? "Finish Interview"
-                      : grading.needs_followup
-                        ? "Answer Follow-up"
-                        : "Next Question"}
+                  <button onClick={proceedNext} className="w-full flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-xl text-white font-bold hover:opacity-90 transition">
+                    {currentQIndex + 1 >= questions.length ? "Finish Interview" : grading.needs_followup ? "Answer Follow-up" : "Next Question"}
                     <ChevronRight className="w-5 h-5" />
                   </button>
                 </div>
               )}
-            </>
+
+              {/* Code counter question banner */}
+              {isCodeCounterActive && (
+                <div className="bg-purple-500/10 border border-purple-500/40 rounded-xl p-4 text-sm text-purple-400">
+                  <p className="font-semibold mb-1">📣 Answer verbally:</p>
+                  <p>{codeCounterQuestion}</p>
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          {/* RESIZE HANDLE */}
+          <PanelResizeHandle className="w-1.5 bg-slate-800 hover:bg-purple-500/50 transition-colors cursor-col-resize" />
+
+          {/* RIGHT PANEL — Code Sandbox */}
+          <Panel defaultSize="60%" minSize="40%">
+            <AnimatePresence>
+              <motion.div
+                key="sandbox"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+                className="h-full"
+              >
+                <CodeSandbox
+                  language={inferLanguageFromTopic(session?.topic || "")}
+                  questionContext={currentQuestion?.question || ""}
+                  onCodeSubmit={handleCodeSubmit}
+                  isAnalyzing={isAnalyzingCode}
+                  analysisResult={codeAnalysis}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </Panel>
+        </PanelGroup>
+      ) : (
+        /* ── Single-column layout for non-coding / ready / etc ─────── */
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 max-w-3xl mx-auto w-full gap-8">
+          {phase === "ready" && (
+            <div className="text-center space-y-6">
+              <div className="w-20 h-20 rounded-full bg-brand-purple/20 flex items-center justify-center mx-auto border border-brand-purple/30">
+                <Brain className="w-10 h-10 text-brand-purple" />
+              </div>
+              <h2 className="text-2xl font-bold text-white">Ready to Begin?</h2>
+              <p className="text-slate-400">
+                {session?.topic} • {session?.difficulty} • {session?.duration}
+              </p>
+              <p className="text-slate-400 text-sm">
+                {questions.length} questions prepared. The AI interviewer will
+                speak each question aloud.
+              </p>
+              <button
+                onClick={startInterview}
+                className="px-10 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-2xl text-white font-bold text-lg hover:opacity-90 transition shadow-[0_0_30px_rgba(168,85,247,0.4)]"
+              >
+                Start Interview
+              </button>
+            </div>
           )}
-      </div>
+
+          {(phase === "speaking" ||
+            phase === "listening" ||
+            phase === "recording" ||
+            phase === "processing" ||
+            phase === "feedback" ||
+            phase === "followup") &&
+            currentQuestion && (
+              <>
+                <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-3 backdrop-blur">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-brand-purple">
+                      {isFollowup ? "Follow-up" : `Question ${currentQIndex + 1}`}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 bg-slate-800 rounded-full text-slate-400">
+                      {currentQuestion.category}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 bg-slate-800 rounded-full text-slate-400">
+                      {currentQuestion.difficulty}
+                    </span>
+                  </div>
+                  <p className="text-white text-lg font-medium leading-relaxed">
+                    {isFollowup ? followupText : currentQuestion.question}
+                  </p>
+                </div>
+
+                {phase === "speaking" && (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="flex items-center gap-2 px-5 py-3 bg-brand-purple/10 border border-brand-purple/30 rounded-full">
+                      <Volume2 className="w-5 h-5 text-brand-purple animate-pulse" />
+                      <span className="text-brand-purple text-sm font-medium">
+                        AI Interviewer is speaking...
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div
+                          key={i}
+                          className="w-1 bg-brand-purple rounded-full animate-bounce"
+                          style={{
+                            height: `${8 + (i % 3) * 8}px`,
+                            animationDelay: `${i * 0.1}s`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {phase === "listening" && (
+                  <div className="flex flex-col items-center gap-5">
+                    <p className="text-slate-400 text-sm">
+                      Your turn to answer. Press the button to start recording.
+                    </p>
+                    <button
+                      onClick={startRecording}
+                      className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-purple to-brand-neon flex items-center justify-center shadow-[0_0_40px_rgba(168,85,247,0.5)] hover:shadow-[0_0_60px_rgba(217,70,239,0.7)] transition-all hover:scale-105"
+                    >
+                      <Mic className="w-8 h-8 text-white" />
+                    </button>
+                    <p className="text-xs text-slate-600">
+                      Press & hold, or click to start
+                    </p>
+                  </div>
+                )}
+
+                {phase === "recording" && (
+                  <div className="flex flex-col items-center gap-5">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                      <span className="text-sm font-medium">
+                        Recording... speak your answer
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                        <div
+                          key={i}
+                          className="w-1 bg-red-500 rounded-full animate-bounce"
+                          style={{
+                            height: `${6 + Math.sin(i) * 10 + 10}px`,
+                            animationDelay: `${i * 0.08}s`,
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={submitAnswer}
+                      className="flex items-center gap-2 px-8 py-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 font-semibold hover:bg-red-500/30 transition"
+                    >
+                      <Square className="w-4 h-4 fill-current" />
+                      Stop & Submit
+                    </button>
+                  </div>
+                )}
+
+                {phase === "processing" && (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="flex items-center gap-3 px-6 py-3 bg-slate-900 border border-slate-700 rounded-xl">
+                      <Loader2 className="w-5 h-5 text-brand-purple animate-spin" />
+                      <span className="text-slate-300 text-sm">
+                        Transcribing and grading your answer...
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {phase === "feedback" && grading && (
+                  <div className="w-full space-y-4">
+                    {transcript && (
+                      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+                        <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-semibold">
+                          Your Answer (Transcribed)
+                        </p>
+                        <p className="text-slate-300 text-sm leading-relaxed">
+                          {transcript}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "Accuracy", value: grading.accuracy_score, color: "text-blue-400" },
+                        { label: "Depth", value: grading.depth_score, color: "text-brand-purple" },
+                        { label: "Communication", value: grading.communication_score, color: "text-brand-neon" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
+                          <div className={`text-2xl font-extrabold ${color}`}>
+                            {value}
+                            <span className="text-sm text-slate-500">/10</span>
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">{label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+                      <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">
+                        AI Feedback
+                      </p>
+                      <p className="text-slate-300 text-sm leading-relaxed">
+                        {grading.feedback}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={proceedNext}
+                      className="w-full flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-xl text-white font-bold hover:opacity-90 transition"
+                    >
+                      {currentQIndex + 1 >= questions.length
+                        ? "Finish Interview"
+                        : grading.needs_followup
+                          ? "Answer Follow-up"
+                          : "Next Question"}
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+        </div>
+      )}
     </div>
   );
 }

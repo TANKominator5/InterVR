@@ -114,6 +114,16 @@ Return this exact JSON:
         }
         : null,
       feedback: q.grading?.feedback,
+      code_submission: q.code_submission || null,
+      code_language: q.code_language || null,
+      code_analysis: q.code_analysis ? {
+        verdict: q.code_analysis.verdict,
+        time_complexity: q.code_analysis.time_complexity,
+        space_complexity: q.code_analysis.space_complexity,
+        correctness_score: q.code_analysis.correctness_score,
+        quality_score: q.code_analysis.quality_score,
+        overall_feedback: q.code_analysis.overall_feedback,
+      } : null,
     }));
 
     const durationMinutes = session.completed_at
