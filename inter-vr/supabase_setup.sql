@@ -39,8 +39,8 @@ USING (auth.uid() = id);
 -- Note: Buckets are often created via the UI, but this SQL ensures the 'resumes' bucket exists.
 -- This requires the 'storage' schema permissions.
 INSERT INTO storage.buckets (id, name, public) 
-VALUES ('resumes', 'resumes', true)
-ON CONFLICT (id) DO NOTHING;
+VALUES ('resumes', 'resumes', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
 
 -- 5. Storage RLS Policies
 -- Allow authenticated users to upload to their own folder (user_id/filename)

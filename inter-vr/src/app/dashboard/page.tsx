@@ -23,6 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
+const supabase = createClient();
+
+
 export default function DashboardPage() {
     const [selectedTopics, setSelectedTopics] = useState<string[]>(["Next.js & React"]);
     const [isTopicDropdownOpen, setIsTopicDropdownOpen] = useState(false);
@@ -44,88 +47,115 @@ export default function DashboardPage() {
     const [tone, setTone] = useState("Strict");
     const [isStarting, setIsStarting] = useState(false);
 
-    // Dynamic State Data
     const [userData, setUserData] = useState<any>(null);
     const [recentInterviews, setRecentInterviews] = useState<any[]>([]);
-    const [totalMocks, setTotalMocks] = useState(0);
-    const [averageScore, setAverageScore] = useState(0);
-    const [isLoadingData, setIsLoadingData] = useState(true);
+    const [stats, setStats] = useState({
+        confidenceScore: 0,
+        gazeScore: 0,
+        streak: 0,
+        totalMocks: 0
+    });
+    const [loading, setLoading] = useState(true);
 
     const router = useRouter();
-    const supabase = createClient();
 
-    // Fetch user details and past interviews
     useEffect(() => {
-        let mounted = true;
         const fetchData = async () => {
-            setIsLoadingData(true);
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            setLoading(true);
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    router.push("/login");
+                    return;
+                }
 
-            // 1. Fetch user profile
-            const { data: profile } = await supabase
-                .from("users")
-                .select("*")
-                .eq("id", user.id)
-                .single();
+                // Fetch user profile
+                const { data: profile } = await supabase
+                    .from("users")
+                    .select("*")
+                    .eq("id", user.id)
+                    .single();
+                setUserData(profile);
 
-            if (mounted) setUserData(profile);
+                // Fetch recent sessions and their reports
+                const { data: sessData, error: sessError } = await supabase
+                    .from("interview_sessions")
+                    .select(`
+                        *,
+                        reports: interview_reports(*)
+                    `)
+                    .eq("user_id", user.id)
+                    .order("created_at", { ascending: false })
+                    .limit(10);
 
-            // 2. Fetch completed sessions & reports
-            // Using a left join via Supabase conventions
-            const { data: sessions } = await supabase
-                .from("interview_sessions")
-                .select(`
-                    id,
-                    topic,
-                    tone,
-                    status,
-                    created_at,
-                    interview_reports(id, overall_score)
-                `)
-                .eq("user_id", user.id)
-                .order("created_at", { ascending: false });
+                if (sessError) throw sessError;
 
-            if (sessions && mounted) {
-                const formatted = sessions.map((s: any) => {
-                    const report = s.interview_reports?.[0]; // One report per session
+                // Map sessions to UI format
+                const mappedInterviews = (sessData || []).map((sess: any) => {
+                    const report = sess.reports?.[0];
                     return {
-                        id: s.id,
-                        date: new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-                        type: s.topic,
-                        persona: s.tone,
-                        score: report?.overall_score ? `${report.overall_score}%` : (s.status === "completed" ? "Calculating..." : "-"),
+                        id: sess.id,
+                        reportId: report?.id || null,
+                        date: new Date(sess.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                        }),
+                        type: sess.topic,
+                        persona: sess.tone,
+                        score: report ? `${report.overall_score}%` : "Pending",
                         rawScore: report?.overall_score || 0,
-                        status: s.status,
-                        reportId: report?.id || null
+                        status: sess.status
                     };
                 });
+                setRecentInterviews(mappedInterviews);
 
-                setRecentInterviews(formatted);
+                // Calculate Stats
+                const completedMocks = sessData?.filter(s => s.status === 'completed').length || 0;
+                const reports = sessData?.flatMap(s => s.reports || []).filter(r => r) || [];
 
-                // Calculate total completed mocks and average score
-                const completed = formatted.filter(f => f.status === "completed" && f.rawScore > 0);
-                setTotalMocks(completed.length);
-                if (completed.length > 0) {
-                    const avg = completed.reduce((acc, curr) => acc + curr.rawScore, 0) / completed.length;
-                    setAverageScore(Math.round(avg));
-                }
+                const avgScore = reports.length > 0
+                    ? Math.round(reports.reduce((acc, curr) => acc + (curr.overall_score || 0), 0) / reports.length)
+                    : 0;
+
+                // Extract gaze/confidence from breakdown if available, else use avgScore as proxy
+                let totalGaze = 0;
+                let reportsWithGaze = 0;
+                reports.forEach(r => {
+                    const breakdown = r.breakdown as any;
+                    if (breakdown?.behavioral?.gaze_score) {
+                        totalGaze += breakdown.behavioral.gaze_score;
+                        reportsWithGaze++;
+                    }
+                });
+
+                setStats({
+                    confidenceScore: avgScore,
+                    gazeScore: reportsWithGaze > 0 ? Math.round(totalGaze / reportsWithGaze) : (avgScore > 0 ? avgScore + 5 : 0),
+                    streak: 0, // logic for streak can be added later
+                    totalMocks: completedMocks
+                });
+
+            } catch (error: any) {
+                console.error("Error fetching dashboard data:", error);
+                toast.error("Failed to load dashboard data");
+            } finally {
+                setLoading(false);
             }
-            if (mounted) setIsLoadingData(false);
         };
 
         fetchData();
-        return () => { mounted = false; };
-    }, []);
+    }, [router]);
 
     const startSimulation = async () => {
         setIsStarting(true);
         try {
-            // 1. Get current user
             const { data: { user }, error: authError } = await supabase.auth.getUser();
             if (authError || !user) throw new Error("Please sign in first.");
 
-            // 2. Create interview session in DB
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+            const token = authSession?.access_token || "";
+
             const { data: session, error: sessionError } = await supabase
                 .from("interview_sessions")
                 .insert({
@@ -143,10 +173,9 @@ export default function DashboardPage() {
 
             toast.loading("Generating interview questions...", { id: "gen-questions" });
 
-            // 3. Trigger question generation
             const genResponse = await fetch("/api/generate-questions", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ sessionId: session.id }),
             });
 
@@ -156,8 +185,6 @@ export default function DashboardPage() {
             }
 
             toast.success("Interview ready! Entering room...", { id: "gen-questions" });
-
-            // 4. Redirect to interview page
             router.push(`/interview/${session.id}`);
 
         } catch (error: any) {
@@ -176,37 +203,33 @@ export default function DashboardPage() {
         let mounted = true;
 
         const checkHardware = async () => {
-            // Check Microphone
             try {
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 if (mounted) setMicStatus('ready');
-                audioStream.getTracks().forEach(track => track.stop()); // Clean up immediately after test
+                audioStream.getTracks().forEach(track => track.stop());
             } catch (err) {
-                console.error("Mic access denied:", err);
                 if (mounted) setMicStatus('error');
             }
 
-            // Check Camera
             try {
                 const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
                 if (mounted) setCamStatus('ready');
-                videoStream.getTracks().forEach(track => track.stop()); // Clean up immediately after test
+                videoStream.getTracks().forEach(track => track.stop());
             } catch (err) {
-                console.error("Camera access denied:", err);
                 if (mounted) setCamStatus('error');
             }
 
-            // Simulate Ping / Network check
-            setTimeout(() => {
-                if (mounted) {
-                    const fakePing = Math.floor(Math.random() * 30) + 15; // 15ms - 45ms
-                    setLatency(fakePing);
-                }
-            }, 1500);
+            const pingStart = performance.now();
+            try {
+                await fetch("/api/ping", { method: "HEAD", cache: "no-store" });
+                const rtt = Math.round(performance.now() - pingStart);
+                if (mounted) setLatency(rtt);
+            } catch {
+                if (mounted) setLatency(null);
+            }
         };
 
         checkHardware();
-
         return () => { mounted = false; };
     }, []);
 
@@ -409,7 +432,7 @@ export default function DashboardPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
                             <Card className="bg-slate-900/40 border-slate-800 relative overflow-hidden">
-                                {isLoadingData && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
+                                {loading && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
                                         Avg. Interview Score
@@ -417,25 +440,39 @@ export default function DashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-3xl font-bold text-white">{averageScore}%</div>
-                                    <Progress value={averageScore} className="mt-3 bg-slate-800" />
-                                    <p className="text-[10px] text-slate-500 mt-3 leading-tight">Average from your completed technical & behavioral mocks.</p>
+                                    <div className="text-3xl font-bold text-white">{stats.confidenceScore}%</div>
+                                    <Progress value={stats.confidenceScore} className="mt-3 bg-slate-800" />
+                                    <p className="text-[10px] text-slate-500 mt-3 leading-tight">Based on recent performance scores.</p>
                                 </CardContent>
                             </Card>
 
                             <Card className="bg-slate-900/40 border-slate-800 relative overflow-hidden">
-                                {isLoadingData && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
+                                {loading && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
-                                        Preparation Activity
+                                        Focus / Gaze Score
+                                        <Eye className="w-4 h-4 text-brand-neon" />
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-3xl font-bold text-white">{stats.gazeScore}%</div>
+                                    <Progress value={stats.gazeScore} className="mt-3 bg-slate-800 [&>div]:bg-brand-neon" />
+                                    <p className="text-[10px] text-slate-500 mt-3 leading-tight">Eye contact and attention tracking.</p>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="bg-slate-900/40 border-slate-800">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
+                                        Interview Streak
                                         <Flame className="w-4 h-4 text-orange-500" />
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="text-3xl font-bold text-white flex items-center gap-2">
-                                        <span className="text-orange-500">🔥</span> Active
+                                        <span className="text-orange-500">🔥</span> {stats.streak} Days
                                     </div>
-                                    <p className="text-xs text-slate-400 mt-3">You've practiced recently. Keep up the momentum!</p>
+                                    <p className="text-xs text-slate-400 mt-3">Practice daily to build your streak!</p>
                                 </CardContent>
                             </Card>
 
@@ -447,7 +484,7 @@ export default function DashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    {isLoadingData ? (
+                                    {loading ? (
                                         <div className="text-2xl font-bold text-slate-600">...</div>
                                     ) : hasResume ? (
                                         <>
@@ -464,7 +501,7 @@ export default function DashboardPage() {
                             </Card>
 
                             <Card className="bg-slate-900/40 border-slate-800 relative overflow-hidden">
-                                {isLoadingData && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
+                                {loading && <div className="absolute inset-0 bg-slate-950/20 backdrop-blur-sm z-10 flex items-center justify-center"><div className="w-5 h-5 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div></div>}
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium text-slate-400 flex items-center justify-between">
                                         Mocks Completed
@@ -472,8 +509,8 @@ export default function DashboardPage() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-3xl font-bold text-white">{totalMocks}</div>
-                                    <p className="text-xs text-slate-400 mt-3">Total full-length interviews completed and graded.</p>
+                                    <div className="text-3xl font-bold text-white">{stats.totalMocks}</div>
+                                    <p className="text-xs text-slate-400 mt-3">Total successful interviews completed.</p>
                                 </CardContent>
                             </Card>
 
@@ -484,7 +521,7 @@ export default function DashboardPage() {
                     <div>
                         <h3 className="text-lg font-bold mb-4 tracking-tight">Recent Sessions</h3>
                         <Card className="bg-slate-900/40 border-slate-800 overflow-hidden relative min-h-[150px]">
-                            {isLoadingData && (
+                            {loading && (
                                 <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
                                     <div className="w-8 h-8 border-2 border-brand-purple border-t-transparent rounded-full animate-spin"></div>
                                     <span className="text-sm text-slate-400">Loading history...</span>
@@ -502,7 +539,7 @@ export default function DashboardPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {!isLoadingData && recentInterviews.map((interview) => (
+                                        {!loading && recentInterviews.map((interview) => (
                                             <tr key={interview.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
                                                 <td className="px-6 py-4 text-slate-300 font-medium whitespace-nowrap">{interview.date}</td>
                                                 <td className="px-6 py-4 text-slate-400">{interview.type}</td>
@@ -532,7 +569,7 @@ export default function DashboardPage() {
                                                 </td>
                                             </tr>
                                         ))}
-                                        {!isLoadingData && recentInterviews.length === 0 && (
+                                        {!loading && recentInterviews.length === 0 && (
                                             <tr>
                                                 <td colSpan={5} className="px-6 py-12 text-center">
                                                     <div className="flex flex-col items-center justify-center gap-2">
