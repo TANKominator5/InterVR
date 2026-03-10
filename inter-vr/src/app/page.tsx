@@ -62,7 +62,9 @@ export default function Home() {
             </Link>
 
             <Link
-              href="#demo"
+              href="https://www.youtube.com/watch?v=Zz2x4sBfKJM"
+              target="_blank"
+              rel="noopener noreferrer"
               className="group inline-flex items-center justify-center px-8 py-4 font-bold text-slate-700 transition-all duration-200 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-200 shadow-sm"
             >
               <span className="flex items-center gap-2">
