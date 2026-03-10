@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import {
     Trophy, TrendingUp, TrendingDown, Star, Clock,
-    MessageSquare, ChevronDown, ChevronUp, Loader2, ArrowLeft
+    MessageSquare, ChevronDown, ChevronUp, Loader2, ArrowLeft,
+    ShieldCheck, ShieldAlert, Eye
 } from "lucide-react";
 
 export default function ReportPage() {
@@ -130,6 +131,50 @@ export default function ReportPage() {
                         </ul>
                     </div>
                 </div>
+
+                {/* Integrity Report */}
+                {report.browser_anti_cheat && (
+                    <div className={`border rounded-2xl p-5 ${report.browser_anti_cheat.isFlagged
+                            ? "bg-red-500/5 border-red-500/20"
+                            : "bg-emerald-500/5 border-emerald-500/20"
+                        }`}>
+                        <div className="flex items-center gap-2 mb-4">
+                            {report.browser_anti_cheat.isFlagged
+                                ? <ShieldAlert className="w-5 h-5 text-red-400" />
+                                : <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                            }
+                            <h3 className={`font-bold ${report.browser_anti_cheat.isFlagged ? "text-red-400" : "text-emerald-400"}`}>
+                                Session Integrity
+                            </h3>
+                            <span className={`ml-auto text-xs font-bold px-2.5 py-1 rounded-full ${report.browser_anti_cheat.isFlagged
+                                    ? "bg-red-500/20 text-red-400"
+                                    : "bg-emerald-500/20 text-emerald-400"
+                                }`}>
+                                {report.browser_anti_cheat.isFlagged ? "Flagged" : "Clean"}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-center">
+                            <div className="bg-slate-900/60 rounded-xl p-3">
+                                <div className={`text-2xl font-extrabold ${report.browser_anti_cheat.tabSwitchCount > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                                    {report.browser_anti_cheat.tabSwitchCount}
+                                </div>
+                                <div className="text-xs text-slate-500 mt-1">Tab Switches</div>
+                            </div>
+                            <div className="bg-slate-900/60 rounded-xl p-3">
+                                <div className={`text-2xl font-extrabold ${report.browser_anti_cheat.windowBlurCount > 0 ? "text-amber-400" : "text-emerald-400"}`}>
+                                    {report.browser_anti_cheat.windowBlurCount}
+                                </div>
+                                <div className="text-xs text-slate-500 mt-1">Focus Lost</div>
+                            </div>
+                            <div className="bg-slate-900/60 rounded-xl p-3">
+                                <div className={`text-2xl font-extrabold ${report.browser_anti_cheat.pasteCount > 0 ? "text-red-400" : "text-emerald-400"}`}>
+                                    {report.browser_anti_cheat.pasteCount}
+                                </div>
+                                <div className="text-xs text-slate-500 mt-1">Paste Events</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Question Breakdown */}
                 <div className="space-y-3">
