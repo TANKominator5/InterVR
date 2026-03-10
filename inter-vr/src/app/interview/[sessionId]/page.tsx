@@ -196,8 +196,6 @@ export default function InterviewRoomPage() {
           router.push("/dashboard");
         }, 4000);
       } else {
-        setPhaseBeforeViolation(phase);
-        setPhase("loading");
         setShowViolationOverlay(true);
       }
 
@@ -209,11 +207,7 @@ export default function InterviewRoomPage() {
   const handleResumeAfterViolation = useCallback(async () => {
     await enterFullscreen();
     setShowViolationOverlay(false);
-    if (phaseBeforeViolation) {
-      setPhase(phaseBeforeViolation);
-      setPhaseBeforeViolation(null);
-    }
-  }, [enterFullscreen, phaseBeforeViolation]);
+  }, [enterFullscreen]);
 
   // ── Load Session ───────────────────────────────────────────────────────────
   useEffect(() => {
