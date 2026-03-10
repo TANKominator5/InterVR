@@ -44,6 +44,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// FIX 1: supabase is instantiated once outside the component so it's a stable
+// singleton — safe to omit from dependency arrays (it never changes).
 const supabase = createClient();
 
 const MONTH_NAMES = [
@@ -62,14 +64,59 @@ const MONTH_NAMES = [
 ];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-function StreakCalendar({ recentInterviews }: { recentInterviews: any[] }) {
+// FIX 2: Proper types instead of any[]
+interface InterviewRow {
+  id: string;
+  reportId: string | null;
+  date: string;
+  type: string;
+  persona: string;
+  score: string;
+  rawScore: number;
+  status: string;
+}
+
+interface ReportRow {
+  id: string;
+  overall_score: number;
+  breakdown: unknown;
+}
+
+interface SessionRow {
+  id: string;
+  created_at: string;
+  topic: string;
+  tone: string;
+  status: string;
+  user_id: string;
+  reports: ReportRow[];
+}
+
+interface UserProfile {
+  id: string;
+  full_name: string | null;
+  tech_stack: string | null;
+  processed_resume: string | null;
+  avatar_url: string | null;
+}
+
+interface Breakdown {
+  behavioral?: {
+    gaze_score?: number;
+  };
+}
+
+function StreakCalendar({
+  recentInterviews,
+}: {
+  recentInterviews: InterviewRow[];
+}) {
   const today = new Date();
   const year = today.getFullYear();
   const month = today.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, month, 1).getDay();
 
-  // Build a set of active days from interviews this month
   const activeDays = useMemo(() => {
     const set = new Set<number>();
     recentInterviews.forEach((iv) => {
@@ -126,7 +173,6 @@ export default function DashboardPage() {
   ]);
   const [isTopicDropdownOpen, setIsTopicDropdownOpen] = useState(false);
 
-  // Constant list of topics
   const availableTopics = [
     "Next.js & React",
     "Flutter & Dart",
@@ -143,8 +189,8 @@ export default function DashboardPage() {
   const [tone, setTone] = useState("Strict");
   const [isStarting, setIsStarting] = useState(false);
 
-  const [userData, setUserData] = useState<any>(null);
-  const [recentInterviews, setRecentInterviews] = useState<any[]>([]);
+  const [userData, setUserData] = useState<UserProfile | null>(null);
+  const [recentInterviews, setRecentInterviews] = useState<InterviewRow[]>([]);
   const [stats, setStats] = useState({
     confidenceScore: 0,
     gazeScore: 0,
@@ -155,7 +201,13 @@ export default function DashboardPage() {
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // FIX 3: Use a ref for router.push to avoid router being a useEffect dependency
+  // (Next.js router object is not stable across renders and causes infinite loops).
   const router = useRouter();
+  const routerRef = useRef(router);
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -164,40 +216,50 @@ export default function DashboardPage() {
         const {
           data: { user },
         } = await supabase.auth.getUser();
+
         if (!user) {
-          router.push("/login");
+          routerRef.current.push("/login");
           return;
         }
 
-        // Fetch user profile
-        const { data: profile } = await supabase
+        // FIX 4: Throw on profile fetch failure instead of silently setting null
+        const { data: profile, error: profileError } = await supabase
           .from("users")
           .select("*")
           .eq("id", user.id)
           .single();
-        setUserData(profile);
+
+        if (profileError) throw profileError;
+        setUserData(profile as UserProfile);
 
         // Fetch recent sessions and their reports
+        // FIX 5: Sort reports by created_at desc so reports?.[0] is always the latest
         const { data: sessData, error: sessError } = await supabase
           .from("interview_sessions")
           .select(
             `
-                        *,
-                        reports: interview_reports(*)
-                    `,
+              *,
+              reports: interview_reports(*)
+            `,
           )
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
+          .order("created_at", {
+            ascending: false,
+            referencedTable: "interview_reports",
+          })
           .limit(10);
 
         if (sessError) throw sessError;
 
-        // Map sessions to UI format
-        const mappedInterviews = (sessData || []).map((sess: any) => {
-          const report = sess.reports?.[0];
+        const mappedInterviews: InterviewRow[] = (
+          (sessData as SessionRow[]) || []
+        ).map((sess) => {
+          // reports are sorted desc, so index 0 is the latest
+          const report = sess.reports?.[0] ?? null;
           return {
             id: sess.id,
-            reportId: report?.id || null,
+            reportId: report?.id ?? null,
             date: new Date(sess.created_at).toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
@@ -206,7 +268,7 @@ export default function DashboardPage() {
             type: sess.topic,
             persona: sess.tone,
             score: report ? `${report.overall_score}%` : "Pending",
-            rawScore: report?.overall_score || 0,
+            rawScore: report?.overall_score ?? 0,
             status: sess.status,
           };
         });
@@ -214,27 +276,32 @@ export default function DashboardPage() {
 
         // Calculate Stats
         const completedMocks =
-          sessData?.filter((s) => s.status === "completed").length || 0;
-        const reports =
-          sessData?.flatMap((s) => s.reports || []).filter((r) => r) || [];
+          (sessData as SessionRow[])?.filter((s) => s.status === "completed")
+            .length ?? 0;
+
+        const reports: ReportRow[] =
+          (sessData as SessionRow[])
+            ?.flatMap((s) => s.reports ?? [])
+            .filter(Boolean) ?? [];
 
         const avgScore =
           reports.length > 0
             ? Math.round(
                 reports.reduce(
-                  (acc, curr) => acc + (curr.overall_score || 0),
+                  (acc, curr) => acc + (curr.overall_score ?? 0),
                   0,
                 ) / reports.length,
               )
             : 0;
 
-        // Extract gaze/confidence from breakdown if available, else use avgScore as proxy
+        // FIX 6: Use typed Breakdown instead of casting to any
         let totalGaze = 0;
         let reportsWithGaze = 0;
         reports.forEach((r) => {
-          const breakdown = r.breakdown as any;
-          if (breakdown?.behavioral?.gaze_score) {
-            totalGaze += breakdown.behavioral.gaze_score;
+          const breakdown = r.breakdown as Breakdown | null;
+          const gazeScore = breakdown?.behavioral?.gaze_score;
+          if (typeof gazeScore === "number") {
+            totalGaze += gazeScore;
             reportsWithGaze++;
           }
         });
@@ -247,10 +314,10 @@ export default function DashboardPage() {
               : avgScore > 0
                 ? avgScore + 5
                 : 0,
-          streak: 0, // logic for streak can be added later
+          streak: 0,
           totalMocks: completedMocks,
         });
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error fetching dashboard data:", error);
         toast.error("Failed to load dashboard data");
       } finally {
@@ -259,7 +326,10 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, [router]);
+    // FIX 7: Empty dependency array — supabase is a stable singleton (defined outside
+    // the component) and router is accessed via routerRef, so neither belongs here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -268,7 +338,6 @@ export default function DashboardPage() {
     const rect = buttonRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    // Set variables to track mouse position for the background glow
     buttonRef.current.style.setProperty("--mouse-x", `${x}px`);
     buttonRef.current.style.setProperty("--mouse-y", `${y}px`);
   };
@@ -285,7 +354,7 @@ export default function DashboardPage() {
       const {
         data: { session: authSession },
       } = await supabase.auth.getSession();
-      const token = authSession?.access_token || "";
+      const token = authSession?.access_token ?? "";
 
       const { data: session, error: sessionError } = await supabase
         .from("interview_sessions")
@@ -301,7 +370,7 @@ export default function DashboardPage() {
         .single();
 
       if (sessionError || !session)
-        throw new Error(sessionError?.message || "Failed to create session");
+        throw new Error(sessionError?.message ?? "Failed to create session");
 
       toast.loading("Generating interview questions...", {
         id: "gen-questions",
@@ -318,16 +387,18 @@ export default function DashboardPage() {
 
       if (!genResponse.ok) {
         const errData = await genResponse.json();
-        throw new Error(errData.error || "Failed to generate questions");
+        throw new Error(errData.error ?? "Failed to generate questions");
       }
 
       toast.success("Interview ready! Entering room...", {
         id: "gen-questions",
       });
       router.push(`/interview/${session.id}`);
-    } catch (error: any) {
+    } catch (error) {
       toast.dismiss("gen-questions");
-      toast.error(error.message || "Something went wrong.");
+      toast.error(
+        error instanceof Error ? error.message : "Something went wrong.",
+      );
     } finally {
       setIsStarting(false);
     }
@@ -351,7 +422,7 @@ export default function DashboardPage() {
         });
         if (mounted) setMicStatus("ready");
         audioStream.getTracks().forEach((track) => track.stop());
-      } catch (err) {
+      } catch {
         if (mounted) setMicStatus("error");
       }
 
@@ -361,7 +432,7 @@ export default function DashboardPage() {
         });
         if (mounted) setCamStatus("ready");
         videoStream.getTracks().forEach((track) => track.stop());
-      } catch (err) {
+      } catch {
         if (mounted) setCamStatus("error");
       }
 
@@ -381,7 +452,6 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Camera stream toggle
   useEffect(() => {
     let stream: MediaStream | null = null;
     if (showCamera && videoRef.current) {
@@ -400,17 +470,14 @@ export default function DashboardPage() {
     };
   }, [showCamera]);
 
-  const userFirstName = userData?.full_name?.split(" ")[0] || "Guest";
-  const userRole = userData?.tech_stack || "Candidate";
-  const userInitial = userData?.full_name?.charAt(0) || "G";
+  const userFirstName = userData?.full_name?.split(" ")[0] ?? "Guest";
+  const userRole = userData?.tech_stack ?? "Candidate";
+  const userInitial = userData?.full_name?.charAt(0) ?? "G";
   const hasResume = !!userData?.processed_resume;
   const userAvatar = userData?.avatar_url;
 
   return (
     <div className="relative min-h-screen bg-[linear-gradient(to_bottom_right,var(--color-blue-500),var(--color-blue-300),var(--color-orange-300),var(--color-orange-500))] text-slate-900 font-sans selection:bg-orange-500/30 overflow-x-hidden">
-      {/* Background glow effects */}
-      {/* <div className="absolute h-full w-full bg-gradient-to-r from-primary/20 to-primary/30"></div> */}
-      {/* Dashboard Content */}
       <div className="relative p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full z-10">
         <div className="mb-2 md:mb-4">
           <h1 className="text-3xl md:text-5xl font-extrabold text-white drop-shadow-sm tracking-tight">
@@ -425,7 +492,6 @@ export default function DashboardPage() {
             className="bg-white/80 border-slate-200 shadow-xl backdrop-blur-xl rounded-[2rem] relative overflow-hidden cursor-pointer group"
             onClick={() => setShowCamera((prev) => !prev)}
           >
-            {/* <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-secondary to-transparent opacity-50" /> */}
             <CardContent className="p-10 flex flex-col items-center h-full">
               <div className="relative">
                 <div className="relative w-[200px] aspect-square rounded-full overflow-hidden">
@@ -453,7 +519,6 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {/* Overlay hint */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
                     <div className="flex items-center gap-2 text-white text-sm font-medium bg-black/60 px-4 py-2 rounded-full backdrop-blur-sm">
                       <Camera className="w-4 h-4" />
@@ -468,7 +533,7 @@ export default function DashboardPage() {
               </div>
               <div className="p-4 text-center w-full">
                 <p className="font-bold text-lg text-slate-900">
-                  {userData?.full_name || "Guest"}
+                  {userData?.full_name ?? "Guest"}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">{userRole}</p>
               </div>
@@ -516,7 +581,6 @@ export default function DashboardPage() {
                     Topics
                   </label>
 
-                  {/* Custom Multi-Select Input Box with Shadcn DropdownMenu */}
                   <DropdownMenu
                     open={isTopicDropdownOpen}
                     onOpenChange={setIsTopicDropdownOpen}
@@ -717,7 +781,6 @@ export default function DashboardPage() {
             Your Performance Analytics
           </h3>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Left: 2x2 Stat Cards */}
             <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Card className="bg-white/80 border-slate-200 shadow-md backdrop-blur-md relative overflow-hidden">
                 {loading && (
@@ -846,7 +909,6 @@ export default function DashboardPage() {
                   </span>
                 </div>
 
-                {/* Calendar Grid */}
                 <StreakCalendar recentInterviews={recentInterviews} />
 
                 <p className="text-xs text-slate-400 font-medium mt-auto pt-3">
