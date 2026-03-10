@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { sessionId } = await request.json();
+    const { sessionId, browserAntiCheatSummary } = await request.json();
 
     // Verify session belongs to user
     const { data: sessionCheck } = await supabase
@@ -146,6 +146,7 @@ Return this exact JSON:
         summary: reportData.summary,
         strengths: reportData.strengths,
         areas_to_improve: reportData.areas_to_improve,
+        browser_anti_cheat: browserAntiCheatSummary || null,
       })
       .select()
       .single();

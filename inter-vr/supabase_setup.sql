@@ -118,3 +118,36 @@ USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own reports"
 ON public.interview_reports FOR INSERT
 WITH CHECK (auth.uid() = user_id);
+
+-- =============================================
+-- 8. Browser Anti-Cheat Logs Table
+-- =============================================
+CREATE TABLE IF NOT EXISTS public.browser_anti_cheat_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID REFERENCES public.interview_sessions(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  tab_switch_count INTEGER NOT NULL DEFAULT 0,
+  window_blur_count INTEGER NOT NULL DEFAULT 0,
+  paste_count INTEGER NOT NULL DEFAULT 0,
+  is_flagged BOOLEAN NOT NULL DEFAULT FALSE,
+  events JSONB NOT NULL DEFAULT '[]'::jsonb,
+  last_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.browser_anti_cheat_logs ENABLE ROW LEVEL SECURITY;
+
+-- Users can only read their own session's log
+CREATE POLICY "Users can view own browser anti-cheat log"
+ON public.browser_anti_cheat_logs FOR SELECT
+USING (
+  session_id IN (
+    SELECT id FROM public.interview_sessions WHERE user_id = auth.uid()
+  )
+);
+-- Note: INSERT and UPDATE are done only by the server via admin client — no user-level write policy needed.
+
+-- =============================================
+-- 9. Add browser_anti_cheat column to reports
+-- =============================================
+ALTER TABLE public.interview_reports
+ADD COLUMN IF NOT EXISTS browser_anti_cheat JSONB DEFAULT NULL;

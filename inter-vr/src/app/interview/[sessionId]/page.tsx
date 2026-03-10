@@ -20,6 +20,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import useVideoAntiCheat from "@/hooks/useVideoAntiCheat";
+import useBrowserAntiCheat from "@/hooks/useBrowserAntiCheat";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { motion, AnimatePresence } from "framer-motion";
 import CodeSandbox from "@/components/CodeSandbox";
@@ -96,6 +97,7 @@ export default function InterviewRoomPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const antiCheatVideoRef = useRef<HTMLVideoElement>(null);
+  const lastFlushedEventIndexRef = useRef(0);
 
   // ── Video Anti-Cheat ───────────────────────────────────────────────────────
   const [webcamEnabled, setWebcamEnabled] = useState(false);
@@ -104,6 +106,14 @@ export default function InterviewRoomPage() {
   const antiCheatStatus = useVideoAntiCheat(
     antiCheatVideoRef,
     webcamEnabled && phase !== "completed" && phase !== "error",
+  );
+
+  // ── Browser Anti-Cheat ──────────────────────────────────────────────────────
+  const browserAntiCheat = useBrowserAntiCheat(
+    phase !== "loading" &&
+    phase !== "ready" &&
+    phase !== "completed" &&
+    phase !== "error"
   );
 
   // ── Timer ──────────────────────────────────────────────────────────────────
@@ -221,6 +231,118 @@ export default function InterviewRoomPage() {
 
     return () => clearInterval(interval);
   }, [antiCheatStatus, phase, session?.id]);
+
+  // ── Browser Anti-Cheat Periodic Flush ─────────────────────────────────────
+  useEffect(() => {
+    if (
+      phase === "loading" ||
+      phase === "ready" ||
+      phase === "completed" ||
+      phase === "error"
+    ) return;
+
+    const interval = setInterval(async () => {
+      const allEvents = browserAntiCheat.events;
+      const newEvents = allEvents.slice(lastFlushedEventIndexRef.current);
+      if (newEvents.length === 0 || !session?.id || !authToken) return;
+
+      try {
+        await fetch("/api/browser-anti-cheat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            sessionId: session.id,
+            newEvents,
+            summary: {
+              tabSwitchCount: browserAntiCheat.tabSwitchCount,
+              windowBlurCount: browserAntiCheat.windowBlurCount,
+              pasteCount: browserAntiCheat.pasteCount,
+              isFlagged: browserAntiCheat.isFlagged,
+            },
+          }),
+        });
+        lastFlushedEventIndexRef.current = allEvents.length;
+      } catch (err) {
+        console.error("[BrowserAntiCheat] Flush failed:", err);
+      }
+    }, 10_000); // flush every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [browserAntiCheat, phase, session?.id, authToken]);
+
+  // ── Browser Anti-Cheat Warning Chime ──────────────────────────────────────
+  useEffect(() => {
+    if (
+      !browserAntiCheat.showWarning ||
+      phase === "completed" ||
+      phase === "error"
+    ) {
+      return;
+    }
+
+    let audioCtx: AudioContext | null = null;
+    let osc: OscillatorNode | null = null;
+    let gainNode: GainNode | null = null;
+    let active = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    try {
+      audioCtx = new (
+        window.AudioContext || (window as any).webkitAudioContext
+      )();
+    } catch (e) {
+      console.warn("Web Audio API not supported", e);
+      return;
+    }
+
+    const playChime = () => {
+      if (!active || !audioCtx) return;
+
+      osc = audioCtx.createOscillator();
+      gainNode = audioCtx.createGain();
+
+      osc.type = "square";
+      osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+      osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.001,
+        audioCtx.currentTime + 0.3,
+      );
+
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.35);
+
+      timeoutId = setTimeout(playChime, 500);
+    };
+
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume().then(playChime);
+    } else {
+      playChime();
+    }
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+      if (osc) {
+        try {
+          osc.stop();
+        } catch (e) { }
+      }
+      if (audioCtx) {
+        audioCtx.close();
+      }
+    };
+  }, [browserAntiCheat.isFlagged, phase]);
 
   // ── Anti-Cheat Chime Audio ─────────────────────────────────────────────────
   useEffect(() => {
@@ -544,7 +666,16 @@ export default function InterviewRoomPage() {
     const res = await fetch("/api/interview/report", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({
+        sessionId,
+        browserAntiCheatSummary: {
+          tabSwitchCount: browserAntiCheat.tabSwitchCount,
+          windowBlurCount: browserAntiCheat.windowBlurCount,
+          pasteCount: browserAntiCheat.pasteCount,
+          isFlagged: browserAntiCheat.isFlagged,
+          totalEvents: browserAntiCheat.events.length,
+        },
+      }),
     });
     const data = await res.json();
     if (data.reportId) setReportId(data.reportId);
@@ -725,6 +856,19 @@ export default function InterviewRoomPage() {
             </div>
           )}
 
+          {/* Browser Anti-Cheat Counter */}
+          {(browserAntiCheat.tabSwitchCount > 0 || browserAntiCheat.pasteCount > 0) && (
+            <div className="flex items-center gap-1.5 text-amber-400 text-xs font-mono">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>
+                {[
+                  browserAntiCheat.tabSwitchCount > 0 && `${browserAntiCheat.tabSwitchCount} switch${browserAntiCheat.tabSwitchCount !== 1 ? "es" : ""}`,
+                  browserAntiCheat.pasteCount > 0 && `${browserAntiCheat.pasteCount} paste${browserAntiCheat.pasteCount !== 1 ? "s" : ""}`,
+                ].filter(Boolean).join(" · ")}
+              </span>
+            </div>
+          )}
+
           {/* Anti-Cheat Overlay */}
           <div className="flex items-center gap-4 border-l border-slate-700 pl-4 ml-2">
             <div className="relative">
@@ -800,6 +944,21 @@ export default function InterviewRoomPage() {
           {/* LEFT PANEL — Question + voice controls */}
           <Panel defaultSize="40%" minSize="30%">
             <div className="h-full overflow-y-auto p-6 flex flex-col gap-6">
+              {/* Browser Anti-Cheat Warning Banner */}
+              {browserAntiCheat.showWarning && (
+                <div className="w-full flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-red-400 text-sm font-semibold">Integrity Warning</span>
+                    <span className="text-red-400/80 text-xs">
+                      {browserAntiCheat.tabSwitchCount > 0 && `Tab switched ${browserAntiCheat.tabSwitchCount}×. `}
+                      {browserAntiCheat.pasteCount > 0 && `Paste detected ${browserAntiCheat.pasteCount}×. `}
+                      This activity has been logged.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Question Display */}
               <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-3 backdrop-blur">
                 <div className="flex items-center gap-2">
@@ -817,6 +976,40 @@ export default function InterviewRoomPage() {
                   {isFollowup ? followupText : currentQuestion.question}
                 </p>
               </div>
+
+              {/* Live Browser Activity Log */}
+              {browserAntiCheat.events.length > 0 && (
+                <div className="w-full bg-slate-900/40 border border-slate-800/60 rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 border-b border-slate-800/60 flex items-center gap-2">
+                    <Activity className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Activity Log</span>
+                  </div>
+                  <ul className="divide-y divide-slate-800/40 max-h-32 overflow-y-auto">
+                    {[...browserAntiCheat.events].reverse().slice(0, 8).map((event, i) => (
+                      <li key={i} className="flex items-center justify-between px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${event.type === "tab_hidden" || event.type === "window_blur" ? "bg-red-400" :
+                              event.type === "paste" ? "bg-purple-400" :
+                                "bg-emerald-400"
+                            }`} />
+                          <span className="text-xs text-slate-400">
+                            {event.type === "tab_hidden" && "Tab switched away"}
+                            {event.type === "tab_visible" && "Returned to tab"}
+                            {event.type === "window_blur" && "Window lost focus"}
+                            {event.type === "window_focus" && "Window focused"}
+                            {event.type === "paste" && `Pasted: "${event.detail}"`}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-600 font-mono tabular-nums">
+                          {new Date(event.timestamp).toLocaleTimeString("en-US", {
+                            hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit"
+                          })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {phase === "speaking" && (
                 <div className="flex flex-col items-center gap-4">
@@ -964,6 +1157,21 @@ export default function InterviewRoomPage() {
             phase === "followup") &&
             currentQuestion && (
               <>
+                {/* Browser Anti-Cheat Warning Banner */}
+                {browserAntiCheat.showWarning && (
+                  <div className="w-full flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-red-400 text-sm font-semibold">Integrity Warning</span>
+                      <span className="text-red-400/80 text-xs">
+                        {browserAntiCheat.tabSwitchCount > 0 && `Tab switched ${browserAntiCheat.tabSwitchCount}×. `}
+                        {browserAntiCheat.pasteCount > 0 && `Paste detected ${browserAntiCheat.pasteCount}×. `}
+                        This activity has been logged.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-3 backdrop-blur">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-brand-purple">
@@ -980,6 +1188,40 @@ export default function InterviewRoomPage() {
                     {isFollowup ? followupText : currentQuestion.question}
                   </p>
                 </div>
+
+                {/* Live Browser Activity Log */}
+                {browserAntiCheat.events.length > 0 && (
+                  <div className="w-full bg-slate-900/40 border border-slate-800/60 rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 border-b border-slate-800/60 flex items-center gap-2">
+                      <Activity className="w-3.5 h-3.5 text-slate-500" />
+                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Activity Log</span>
+                    </div>
+                    <ul className="divide-y divide-slate-800/40 max-h-32 overflow-y-auto">
+                      {[...browserAntiCheat.events].reverse().slice(0, 8).map((event, i) => (
+                        <li key={i} className="flex items-center justify-between px-3 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${event.type === "tab_hidden" || event.type === "window_blur" ? "bg-red-400" :
+                                event.type === "paste" ? "bg-purple-400" :
+                                  "bg-emerald-400"
+                              }`} />
+                            <span className="text-xs text-slate-400">
+                              {event.type === "tab_hidden" && "Tab switched away"}
+                              {event.type === "tab_visible" && "Returned to tab"}
+                              {event.type === "window_blur" && "Window lost focus"}
+                              {event.type === "window_focus" && "Window focused"}
+                              {event.type === "paste" && `Pasted: "${event.detail}"`}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-slate-600 font-mono tabular-nums">
+                            {new Date(event.timestamp).toLocaleTimeString("en-US", {
+                              hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit"
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {phase === "speaking" && (
                   <div className="flex flex-col items-center gap-4">
