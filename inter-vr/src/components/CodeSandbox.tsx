@@ -111,7 +111,7 @@ export default function CodeSandbox({
                     <select
                         value={language}
                         onChange={(e) => handleLanguageChange(e.target.value)}
-                        className="bg-muted border border-border text-foreground/90 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
+                        className="bg-muted border border-border text-foreground/90 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-orange-500 appearance-none cursor-pointer"
                     >
                         {LANGUAGE_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>
@@ -119,7 +119,7 @@ export default function CodeSandbox({
                             </option>
                         ))}
                     </select>
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-medium">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-600 text-xs font-bold">
                         <Terminal className="w-3.5 h-3.5" />
                         Coding Challenge
                     </div>
@@ -131,7 +131,7 @@ export default function CodeSandbox({
                     <button
                         onClick={() => onCodeSubmit(code, language)}
                         disabled={isAnalyzing || code.trim().length < 10}
-                        className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-purple-500 to-fuchsia-500 hover:from-purple-600 hover:to-fuchsia-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+                        className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold text-white bg-[linear-gradient(to_right,var(--color-orange-400),var(--color-orange-600))] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_12px_rgba(249,115,22,0.3)]"
                     >
                         {isAnalyzing ? (
                             <>
@@ -152,7 +152,7 @@ export default function CodeSandbox({
             <PanelGroup orientation="vertical" className="flex-1 min-h-0">
                 <Panel defaultSize="60%" minSize="30%">
                     <Editor
-                        theme="vs-dark"
+                        theme="light"
                         language={getMonacoLang(language)}
                         value={code}
                         onChange={(val) => setCode(val || "")}
@@ -173,7 +173,7 @@ export default function CodeSandbox({
                 </Panel>
 
                 {analysisResult && (
-                    <PanelResizeHandle className="h-1.5 bg-muted hover:bg-purple-500/50 transition-colors cursor-row-resize shrink-0" />
+                    <PanelResizeHandle className="h-1.5 bg-slate-200 hover:bg-orange-400/50 transition-colors cursor-row-resize shrink-0" />
                 )}
 
                 {analysisResult && (
@@ -229,17 +229,17 @@ export default function CodeSandbox({
 
                             {/* ── Row 5: Counter Question ──────────────────────────── */}
                             {analysisResult.has_counter_question && analysisResult.counter_question && (
-                                <div className="bg-purple-500/5 border border-purple-500/30 rounded-xl p-4">
+                                <div className="bg-orange-500/5 border border-orange-500/30 rounded-xl p-4">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <MessageCircle className="w-4 h-4 text-purple-400" />
-                                        <span className="text-sm font-semibold text-purple-400">
+                                        <MessageCircle className="w-4 h-4 text-orange-600" />
+                                        <span className="text-sm font-bold text-orange-600">
                                             Follow-up Question
                                         </span>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-sm text-muted-foreground font-medium">
                                         {analysisResult.counter_question}
                                     </p>
-                                    <p className="text-xs text-foreground0 mt-2">
+                                    <p className="text-xs text-foreground0 mt-2 font-semibold text-orange-700">
                                         Answer this question verbally — the interviewer is listening.
                                     </p>
                                 </div>
