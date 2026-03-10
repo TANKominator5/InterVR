@@ -18,6 +18,9 @@ import {
   Trophy,
   Activity,
   AlertTriangle,
+  ShieldAlert,
+  XCircle,
+  Maximize,
 } from "lucide-react";
 import useVideoAntiCheat from "@/hooks/useVideoAntiCheat";
 import useBrowserAntiCheat from "@/hooks/useBrowserAntiCheat";
@@ -25,6 +28,7 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "reac
 import { motion, AnimatePresence } from "framer-motion";
 import CodeSandbox from "@/components/CodeSandbox";
 import type { CodeAnalysis } from "@/components/CodeSandbox";
+import IntegrityViolationOverlay from "@/components/IntegrityViolationOverlay";
 
 type InterviewPhase =
   | "loading" // Fetching session
@@ -84,6 +88,13 @@ export default function InterviewRoomPage() {
   const [reportId, setReportId] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState("");
 
+  // ── Fullscreen / Integrity Lock ────────────────────────────────────────────
+  const [violationCount, setViolationCount] = useState(0);
+  const [showViolationOverlay, setShowViolationOverlay] = useState(false);
+  const [isInterviewTerminated, setIsInterviewTerminated] = useState(false);
+  const [phaseBeforeViolation, setPhaseBeforeViolation] = useState<InterviewPhase | null>(null);
+  const MAX_VIOLATIONS = 3;
+
   // ── Code Sandbox State ──────────────────────────────────────────────────
   const [codeAnalysis, setCodeAnalysis] = useState<CodeAnalysis | null>(null);
   const [isAnalyzingCode, setIsAnalyzingCode] = useState(false);
@@ -135,6 +146,74 @@ export default function InterviewRoomPage() {
 
   const formatTime = (s: number) =>
     `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+  // ── Fullscreen Helpers ─────────────────────────────────────────────────────
+  const enterFullscreen = useCallback(async () => {
+    try {
+      const el = document.documentElement;
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen();
+      else if ((el as any).mozRequestFullScreen) await (el as any).mozRequestFullScreen();
+      else if ((el as any).msRequestFullscreen) await (el as any).msRequestFullscreen();
+    } catch (err) {
+      console.warn("[Fullscreen] Could not enter fullscreen:", err);
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+    } catch (err) {
+      console.warn("[Fullscreen] Could not exit fullscreen:", err);
+    }
+  }, []);
+
+  const isFullscreen = useCallback(() => {
+    return !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+  }, []);
+
+  // ── Handle Integrity Violation ─────────────────────────────────────────────
+  const handleViolation = useCallback(() => {
+    if (
+      phase === "loading" ||
+      phase === "ready" ||
+      phase === "completed" ||
+      phase === "error"
+    ) return;
+
+    setViolationCount(prev => {
+      const newCount = prev + 1;
+
+      if (newCount >= MAX_VIOLATIONS) {
+        setIsInterviewTerminated(true);
+        setShowViolationOverlay(true);
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 4000);
+      } else {
+        setPhaseBeforeViolation(phase);
+        setPhase("loading");
+        setShowViolationOverlay(true);
+      }
+
+      return newCount;
+    });
+  }, [phase, router]);
+
+  // ── Handle Resume After Violation ─────────────────────────────────────────
+  const handleResumeAfterViolation = useCallback(async () => {
+    await enterFullscreen();
+    setShowViolationOverlay(false);
+    if (phaseBeforeViolation) {
+      setPhase(phaseBeforeViolation);
+      setPhaseBeforeViolation(null);
+    }
+  }, [enterFullscreen, phaseBeforeViolation]);
 
   // ── Load Session ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -421,6 +500,67 @@ export default function InterviewRoomPage() {
     };
   }, [antiCheatStatus.isFlagged, phase]);
 
+  // ── Fullscreen Lock & Violation Detection ──────────────────────────────────
+  useEffect(() => {
+    if (
+      phase === "loading" ||
+      phase === "ready" ||
+      phase === "completed" ||
+      phase === "error" ||
+      isInterviewTerminated
+    ) return;
+
+    const handleFullscreenChange = () => {
+      if (!isFullscreen() && !showViolationOverlay) {
+        handleViolation();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && !showViolationOverlay) {
+        handleViolation();
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      if (isCtrl && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (isCtrl && (e.key === "w" || e.key === "W")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (e.key === "Tab" && isCtrl) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      if (e.key === "F11") {
+        e.preventDefault();
+      }
+      if (e.key === "Escape" && isFullscreen()) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener("keydown", handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [phase, isInterviewTerminated, showViolationOverlay, isFullscreen, handleViolation]);
+
   // ── TTS: Speak text (browser-native, instant) ───────────────────────────────
   const speak = useCallback(async (text: string): Promise<void> => {
     return new Promise((resolve) => {
@@ -459,6 +599,9 @@ export default function InterviewRoomPage() {
 
   // ── Start Interview ────────────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
+    // Enter fullscreen when interview starts
+    await enterFullscreen();
+
     // Preload voices (some browsers load them lazily)
     window.speechSynthesis?.getVoices();
 
@@ -468,7 +611,7 @@ export default function InterviewRoomPage() {
     setCurrentQuestion(q);
     await speak(`Question 1: ${q.question}`);
     setPhase("listening");
-  }, [questions, speak]);
+  }, [questions, speak, enterFullscreen]);
 
   // ── Recording (audio) + Live Transcription (SpeechRecognition) ────────────
   const recognitionRef = useRef<any>(null);
@@ -874,6 +1017,31 @@ export default function InterviewRoomPage() {
             </div>
           )}
 
+          {/* Violation Counter Badge */}
+          {(phase === "speaking" || phase === "listening" || phase === "recording" || phase === "processing" || phase === "feedback" || phase === "followup") && (
+            <div className={`flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded-lg border ${
+              violationCount === 0
+                ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                : violationCount === 1
+                ? "text-amber-400 border-amber-500/30 bg-amber-500/10"
+                : "text-red-400 border-red-500/30 bg-red-500/10"
+            }`}>
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>{violationCount}/{MAX_VIOLATIONS} violations</span>
+            </div>
+          )}
+
+          {/* Fullscreen Re-enter Button */}
+          {(phase === "speaking" || phase === "listening" || phase === "recording" || phase === "processing" || phase === "feedback" || phase === "followup") && (
+            <button
+              onClick={enterFullscreen}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-purple/20 border border-brand-purple/40 rounded-lg text-brand-purple text-xs font-semibold hover:bg-brand-purple/30 transition"
+            >
+              <Maximize className="w-3.5 h-3.5" />
+              Fullscreen
+            </button>
+          )}
+
           {/* Anti-Cheat Overlay */}
           <div className="flex items-center gap-4 border-l border-slate-700 pl-4 ml-2">
             <div className="relative">
@@ -1145,6 +1313,13 @@ export default function InterviewRoomPage() {
                 {questions.length} questions prepared. The AI interviewer will
                 speak each question aloud.
               </p>
+              <div className="flex items-center gap-2 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-sm">
+                <ShieldAlert className="w-4 h-4 shrink-0" />
+                <span>
+                  Clicking &quot;Start Interview&quot; will enter <strong>fullscreen mode</strong>.
+                  Tab switching and minimizing are not allowed. 3 violations will terminate the session.
+                </span>
+              </div>
               <button
                 onClick={startInterview}
                 className="px-10 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-2xl text-white font-bold text-lg hover:opacity-90 transition shadow-[0_0_30px_rgba(168,85,247,0.4)]"
@@ -1363,6 +1538,15 @@ export default function InterviewRoomPage() {
               </>
             )}
         </div>
+      )}
+      {/* Integrity Violation Overlay */}
+      {showViolationOverlay && (
+        <IntegrityViolationOverlay
+          violationCount={violationCount}
+          maxViolations={MAX_VIOLATIONS}
+          onResume={handleResumeAfterViolation}
+          isTerminated={isInterviewTerminated}
+        />
       )}
     </div>
   );
