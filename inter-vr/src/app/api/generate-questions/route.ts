@@ -42,55 +42,9 @@ Return ONLY a valid JSON object: {"questions": [...]}
 Each question must have: id (number), question (string), category (conceptual|practical|scenario|coding), difficulty (easy|medium|hard), expected_answer_outline (string), follow_up_hint (string)`;
 }
 
-// Try NIM API with a 15-second timeout
-async function tryNIM(prompt: string): Promise<any[] | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-
-  try {
-    const res = await fetch(NIM_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.NVIDIA_NIM_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "nvidia/llama-3.3-nemotron-super-49b-v1",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-        max_tokens: 4096,
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      console.warn(`NIM returned ${res.status}, falling back to Groq`);
-      return null;
-    }
-
-    const data = await res.json();
-    const raw = data.choices?.[0]?.message?.content || "";
-    const cleaned = raw
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim();
-    const parsed = JSON.parse(cleaned);
-    return parsed.questions || parsed;
-  } catch (err: any) {
-    clearTimeout(timeout);
-    console.warn(
-      "NIM failed/timed out:",
-      err.name === "AbortError" ? "15s timeout" : err.message,
-    );
-    return null;
-  }
-}
-
-// Fallback: Gemini via Vercel AI SDK
-async function useGeminiFallback(prompt: string): Promise<any[]> {
-  console.log("Using Gemini fallback for question generation...");
+// Use Gemini via Vercel AI SDK
+async function generateQuestions(prompt: string): Promise<any[]> {
+  console.log("Using Gemini for question generation...");
   const { text } = await generateText({
     model: google("gemini-2.5-flash"),
     prompt,
@@ -176,13 +130,9 @@ export async function POST(request: NextRequest) {
 
     const prompt = buildPrompt(userContext, session, questionCount);
 
-    // Try NIM first (15s timeout), fall back to Gemini
-    let questions = await tryNIM(prompt);
-    const source = questions ? "nemotron" : "gemini";
-
-    if (!questions) {
-      questions = await useGeminiFallback(prompt);
-    }
+    // Generate questions using Gemini directly
+    const questions = await generateQuestions(prompt);
+    const source = "gemini";
 
     const { error: updateError } = await supabaseAdmin
       .from("interview_sessions")

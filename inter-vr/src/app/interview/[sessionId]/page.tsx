@@ -726,7 +726,12 @@ export default function InterviewRoomPage() {
       if (data.analysis?.has_counter_question && data.analysis?.counter_question) {
         setCodeCounterQuestion(data.analysis.counter_question);
         setIsCodeCounterActive(true);
+        // Also trigger the standard verbal follow-up flow so they can answer it
+        setIsFollowup(true);
+        setFollowupText(data.analysis.counter_question);
+        setPhase("speaking");
         await speak(`Interesting approach. Here is a follow-up: ${data.analysis.counter_question}`);
+        setPhase("listening");
       }
     } catch (err) {
       console.error("Code analysis failed:", err);
