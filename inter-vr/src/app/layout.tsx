@@ -18,7 +18,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "InterVR | AI-Driven WebVR Interview Training",
-  description: "Master your interviews with realistic 3D AI avatars and real-time behavioral analytics.",
+  description:
+    "Master your interviews with realistic 3D AI avatars and real-time behavioral analytics.",
 };
 
 export default function RootLayout({
@@ -27,14 +28,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark scroll-smooth">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen flex flex-col antialiased`}
-      >
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} dark scroll-smooth`}
+    >
+      <body className="min-h-screen flex flex-col antialiased">
         <Navbar />
-        <main className="flex-1 flex flex-col">
-          {children}
-        </main>
+        <main className="flex-1 flex flex-col">{children}</main>
         <Footer />
         <Toaster position="bottom-right" />
       </body>

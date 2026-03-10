@@ -104,14 +104,14 @@ export default function CodeSandbox({
     };
 
     return (
-        <div className="h-full flex flex-col bg-slate-950 border-l border-slate-800">
+        <div className="h-full flex flex-col bg-background border-l border-border">
             {/* ── Toolbar ──────────────────────────────────────────────────────── */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-900/60 shrink-0">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-card/60 shrink-0">
                 <div className="flex items-center gap-3">
                     <select
                         value={language}
                         onChange={(e) => handleLanguageChange(e.target.value)}
-                        className="bg-slate-800 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
+                        className="bg-muted border border-border text-foreground/90 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500 appearance-none cursor-pointer"
                     >
                         {LANGUAGE_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>
@@ -125,7 +125,7 @@ export default function CodeSandbox({
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <span className="text-xs text-slate-500 font-mono hidden sm:block">
+                    <span className="text-xs text-foreground0 font-mono hidden sm:block">
                         {stats.lines} lines · {stats.chars} chars
                     </span>
                     <button
@@ -173,7 +173,7 @@ export default function CodeSandbox({
                 </Panel>
 
                 {analysisResult && (
-                    <PanelResizeHandle className="h-1.5 bg-slate-800 hover:bg-purple-500/50 transition-colors cursor-row-resize shrink-0" />
+                    <PanelResizeHandle className="h-1.5 bg-muted hover:bg-purple-500/50 transition-colors cursor-row-resize shrink-0" />
                 )}
 
                 {analysisResult && (
@@ -182,7 +182,7 @@ export default function CodeSandbox({
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3 }}
-                            className="h-full overflow-y-auto p-4 space-y-4 bg-slate-950"
+                            className="h-full overflow-y-auto p-4 space-y-4 bg-background"
                         >
                             {/* ── Row 1: Verdict Banner ─────────────────────────────── */}
                             <VerdictBanner verdict={analysisResult.verdict} />
@@ -196,11 +196,11 @@ export default function CodeSandbox({
                             </div>
 
                             {/* ── Row 3: Overall Feedback ───────────────────────────── */}
-                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                                <p className="text-xs text-slate-500 uppercase tracking-wider mb-2 font-semibold">
+                            <div className="bg-card border border-border rounded-xl p-4">
+                                <p className="text-xs text-foreground0 uppercase tracking-wider mb-2 font-semibold">
                                     AI Analysis
                                 </p>
-                                <p className="text-sm text-slate-300 leading-relaxed">
+                                <p className="text-sm text-muted-foreground leading-relaxed">
                                     {analysisResult.overall_feedback}
                                 </p>
                             </div>
@@ -208,7 +208,7 @@ export default function CodeSandbox({
                             {/* ── Row 4: Line Feedback ──────────────────────────────── */}
                             {analysisResult.line_feedback.length > 0 && (
                                 <div className="space-y-2">
-                                    <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                                    <p className="text-xs text-foreground0 uppercase tracking-wider font-semibold">
                                         Line-by-Line Notes
                                     </p>
                                     {analysisResult.line_feedback.map((lf, i) => (
@@ -221,7 +221,7 @@ export default function CodeSandbox({
                                             >
                                                 Line {lf.line}
                                             </span>
-                                            <span className="text-slate-300">{lf.comment}</span>
+                                            <span className="text-muted-foreground">{lf.comment}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -236,10 +236,10 @@ export default function CodeSandbox({
                                             Follow-up Question
                                         </span>
                                     </div>
-                                    <p className="text-sm text-slate-300">
+                                    <p className="text-sm text-muted-foreground">
                                         {analysisResult.counter_question}
                                     </p>
-                                    <p className="text-xs text-slate-500 mt-2">
+                                    <p className="text-xs text-foreground0 mt-2">
                                         Answer this question verbally — the interviewer is listening.
                                     </p>
                                 </div>
@@ -312,9 +312,9 @@ function VerdictBanner({ verdict }: { verdict: "pass" | "partial" | "fail" }) {
 
 function ScoreCard({ label, value }: { label: string; value: string }) {
     return (
-        <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 text-center">
+        <div className="bg-muted border border-border rounded-xl p-3 text-center">
             <div className="text-base font-bold text-white">{value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+            <div className="text-xs text-foreground0 mt-0.5">{label}</div>
         </div>
     );
 }
