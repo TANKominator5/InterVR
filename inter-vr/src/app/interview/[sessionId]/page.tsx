@@ -93,7 +93,7 @@ export default function InterviewRoomPage() {
   const [showViolationOverlay, setShowViolationOverlay] = useState(false);
   const [isInterviewTerminated, setIsInterviewTerminated] = useState(false);
   const [phaseBeforeViolation, setPhaseBeforeViolation] = useState<InterviewPhase | null>(null);
-  const MAX_VIOLATIONS = 3;
+  const MAX_VIOLATIONS = 1; // Terminates immediately on 1st violation
 
   // ── Code Sandbox State ──────────────────────────────────────────────────
   const [codeAnalysis, setCodeAnalysis] = useState<CodeAnalysis | null>(null);
@@ -185,6 +185,12 @@ export default function InterviewRoomPage() {
       phase === "completed" ||
       phase === "error"
     ) return;
+
+    // Instantly stop the AI interviewer's voice if they are currently speaking
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      setAudioPlaying(false);
+    }
 
     setViolationCount(prev => {
       const newCount = prev + 1;

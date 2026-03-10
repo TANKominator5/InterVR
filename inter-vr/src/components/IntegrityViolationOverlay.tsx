@@ -70,7 +70,7 @@ export default function IntegrityViolationOverlay({
 
         {/* Violation counter dots */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          {Array.from({ length: maxViolations }).map((_, i) => (
+          {Array.from({ length: maxViolations - 1 }).map((_, i) => (
             <div
               key={i}
               className={`w-4 h-4 rounded-full border-2 ${
@@ -84,8 +84,8 @@ export default function IntegrityViolationOverlay({
 
         {/* Warning text */}
         <p className="text-red-400 text-sm font-semibold mb-8">
-          Warning {violationCount} of {maxViolations} —{" "}
-          {maxViolations - violationCount} remaining before termination
+          Warning {violationCount} of {maxViolations - 1} —{" "}
+          {maxViolations - 1 - violationCount} remaining before termination
         </p>
 
         {/* Resume button */}
