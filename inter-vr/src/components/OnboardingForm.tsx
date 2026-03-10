@@ -172,50 +172,50 @@ export function OnboardingForm() {
     };
 
     return (
-        <div className="w-full max-w-3xl mx-auto bg-slate-900 border border-slate-800 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden">
+        <div className="w-full max-w-3xl mx-auto bg-card border border-border rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-brand-purple/10 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-brand-neon/10 rounded-full blur-[80px] -ml-24 -mb-24 pointer-events-none" />
 
             <div className="mb-10 text-center relative z-10">
                 <h2 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Complete Your Profile</h2>
-                <p className="text-slate-400">Tell us a bit about yourself so the AI can personalize your interview experience.</p>
+                <p className="text-muted-foreground">Tell us a bit about yourself so the AI can personalize your interview experience.</p>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-10 relative z-10">
 
                 {/* Step 1: Basic Personal Info */}
                 <div className="space-y-6">
-                    <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-3 border-b border-border pb-2">
                         <UserIcon className="w-5 h-5 text-brand-neon" />
-                        <h3 className="text-lg font-semibold text-slate-200">Personal Details</h3>
+                        <h3 className="text-lg font-semibold text-foreground/90">Personal Details</h3>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-6">
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Full Name</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Full Name</label>
                             <input
                                 {...register("fullName")}
-                                className={`w-full bg-slate-950 border ${errors.fullName ? 'border-red-500' : 'border-slate-800'} rounded-xl px-4 py-3 text-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
+                                className={`w-full bg-background border ${errors.fullName ? 'border-red-500' : 'border-border'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
                                 placeholder="John Doe"
                             />
                             {errors.fullName && <p className="text-red-500 text-sm mt-1">{errors.fullName.message}</p>}
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Country</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Country</label>
                             <input
                                 {...register("country")}
-                                className={`w-full bg-slate-950 border ${errors.country ? 'border-red-500' : 'border-slate-800'} rounded-xl px-4 py-3 text-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
+                                className={`w-full bg-background border ${errors.country ? 'border-red-500' : 'border-border'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
                                 placeholder="India"
                             />
                             {errors.country && <p className="text-red-500 text-sm mt-1">{errors.country.message}</p>}
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">State / Region</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">State / Region</label>
                             <input
                                 {...register("state")}
-                                className={`w-full bg-slate-950 border ${errors.state ? 'border-red-500' : 'border-slate-800'} rounded-xl px-4 py-3 text-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
+                                className={`w-full bg-background border ${errors.state ? 'border-red-500' : 'border-border'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
                                 placeholder="Maharashtra"
                             />
                             {errors.state && <p className="text-red-500 text-sm mt-1">{errors.state.message}</p>}
@@ -225,27 +225,27 @@ export function OnboardingForm() {
 
                 {/* Step 2: Academy Info */}
                 <div className="space-y-6">
-                    <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-3 border-b border-border pb-2">
                         <GraduationCap className="w-5 h-5 text-emerald-400" />
-                        <h3 className="text-lg font-semibold text-slate-200">Academic Background</h3>
+                        <h3 className="text-lg font-semibold text-foreground/90">Academic Background</h3>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-6">
                         <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Institution / University Name</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Institution / University Name</label>
                             <input
                                 {...register("institutionName")}
-                                className={`w-full bg-slate-950 border ${errors.institutionName ? 'border-red-500' : 'border-slate-800'} rounded-xl px-4 py-3 text-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
+                                className={`w-full bg-background border ${errors.institutionName ? 'border-red-500' : 'border-border'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
                                 placeholder="Harvard University..."
                             />
                             {errors.institutionName && <p className="text-red-500 text-sm mt-1">{errors.institutionName.message}</p>}
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Year of Study</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Year of Study</label>
                             <select
                                 {...register("yearOfStudy")}
-                                className={`w-full bg-slate-950 border ${errors.yearOfStudy ? 'border-red-500' : 'border-slate-800'} rounded-xl px-4 py-3 text-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all appearance-none`}
+                                className={`w-full bg-background border ${errors.yearOfStudy ? 'border-red-500' : 'border-border'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all appearance-none`}
                             >
                                 <option value="" disabled>Select year</option>
                                 {STUDY_YEARS.map((year) => (
@@ -256,12 +256,12 @@ export function OnboardingForm() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Current CGPA</label>
+                            <label className="block text-sm font-medium text-muted-foreground mb-2">Current CGPA</label>
                             <input
                                 type="number"
                                 step="0.01"
                                 {...register("cgpa", { valueAsNumber: true })}
-                                className={`w-full bg-slate-950 border ${errors.cgpa ? 'border-red-500' : 'border-slate-800'} rounded-xl px-4 py-3 text-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
+                                className={`w-full bg-background border ${errors.cgpa ? 'border-red-500' : 'border-border'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all`}
                                 placeholder="e.g. 8.5"
                             />
                             {errors.cgpa && <p className="text-red-500 text-sm mt-1">{errors.cgpa.message}</p>}
@@ -271,16 +271,16 @@ export function OnboardingForm() {
 
                 {/* Step 3: Interview Target & Upload */}
                 <div className="space-y-6">
-                    <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-3 border-b border-border pb-2">
                         <FileText className="w-5 h-5 text-brand-purple" />
-                        <h3 className="text-lg font-semibold text-slate-200">Interview Context</h3>
+                        <h3 className="text-lg font-semibold text-foreground/90">Interview Context</h3>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Target Role</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-2">Target Role</label>
                         <select
                             {...register("techStack")}
-                            className={`w-full bg-slate-950 border ${errors.techStack ? 'border-red-500' : 'border-slate-800'} rounded-xl px-4 py-3 text-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all appearance-none`}
+                            className={`w-full bg-background border ${errors.techStack ? 'border-red-500' : 'border-border'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-brand-purple transition-all appearance-none`}
                         >
                             <option value="" disabled>Select a role</option>
                             {ROLES.map((role) => (
@@ -291,11 +291,11 @@ export function OnboardingForm() {
                     </div>
 
                     <div className="pt-2">
-                        <label className="block text-sm font-medium text-slate-300 mb-2">Resume Upload (PDF)</label>
+                        <label className="block text-sm font-medium text-muted-foreground mb-2">Resume Upload (PDF)</label>
                         <div
                             className={`border-2 border-dashed rounded-3xl p-10 text-center transition-all ${isDragging ? "border-brand-neon bg-brand-neon/5" :
                                 file ? "border-emerald-500/50 bg-emerald-500/5" :
-                                    "border-slate-700 bg-slate-950 hover:border-brand-purple/50"
+                                    "border-border bg-background hover:border-brand-purple/50"
                                 }`}
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
@@ -316,26 +316,26 @@ export function OnboardingForm() {
                                         <CheckCircle2 className="w-8 h-8" />
                                     </div>
                                     <div className="text-white font-medium">{file.name}</div>
-                                    <div className="text-sm text-slate-400 mb-4">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
+                                    <div className="text-sm text-muted-foreground mb-4">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
                                     <button
                                         type="button"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setFile(null);
                                         }}
-                                        className="px-4 py-2 bg-slate-800 hover:bg-red-500/20 hover:text-red-400 text-slate-300 rounded-lg text-sm transition-colors"
+                                        className="px-4 py-2 bg-muted hover:bg-red-500/20 hover:text-red-400 text-muted-foreground rounded-lg text-sm transition-colors"
                                     >
                                         Remove File
                                     </button>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center gap-4 cursor-pointer">
-                                    <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-brand-purple transition-colors">
+                                    <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:text-brand-purple transition-colors">
                                         <UploadCloud className="w-8 h-8" />
                                     </div>
                                     <div>
                                         <div className="text-white font-medium mb-1">Click to upload or drag and drop</div>
-                                        <div className="text-sm text-slate-400">PDFs only (Max 5MB)</div>
+                                        <div className="text-sm text-muted-foreground">PDFs only (Max 5MB)</div>
                                     </div>
                                 </div>
                             )}
@@ -348,7 +348,7 @@ export function OnboardingForm() {
                     <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-gradient-to-r from-brand-purple to-brand-neon hover:from-brand-purple-dark hover:to-brand-purple text-white font-bold rounded-2xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:shadow-[0_0_30px_rgba(217,70,239,0.5)] focus:outline-none focus:ring-2 focus:ring-brand-purple focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-70 disabled:cursor-not-allowed text-lg"
+                        className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-gradient-to-r from-brand-purple to-brand-neon hover:from-brand-purple-dark hover:to-brand-purple text-white font-bold rounded-2xl transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)] hover:shadow-[0_0_30px_rgba(217,70,239,0.5)] focus:outline-none focus:ring-2 focus:ring-brand-purple focus:ring-offset-2 focus:ring-offset-background disabled:opacity-70 disabled:cursor-not-allowed text-lg"
                     >
                         {isSubmitting ? (
                             <>

@@ -26,7 +26,7 @@ export default async function ProfilePage() {
 
     // Pass data into the edit form (defaults to empty strings if null)
     return (
-        <div className="flex-1 min-h-screen py-16 px-4 relative bg-slate-950">
+        <div className="flex-1 min-h-screen py-16 px-4 relative bg-background">
             <ProfileForm initialData={userDetails || {}} />
         </div>
     );
