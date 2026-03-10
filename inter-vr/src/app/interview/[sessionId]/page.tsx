@@ -902,24 +902,24 @@ export default function InterviewRoomPage() {
 
   if (phase === "loading")
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-12 h-12 text-brand-purple animate-spin" />
-          <p className="text-slate-400 text-lg">Loading interview session...</p>
+          <Loader2 className="w-12 h-12 text-orange-500 animate-spin" />
+          <p className="text-slate-500 text-lg font-medium">Loading interview session...</p>
         </div>
       </div>
     );
 
   if (phase === "error")
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center max-w-md">
-          <AlertCircle className="w-16 h-16 text-red-400" />
-          <p className="text-red-400 text-xl font-bold">Something went wrong</p>
-          <p className="text-slate-500">{error}</p>
+          <AlertCircle className="w-16 h-16 text-red-500" />
+          <p className="text-slate-900 text-xl font-bold">Something went wrong</p>
+          <p className="text-slate-600">{error}</p>
           <button
             onClick={() => router.push("/dashboard")}
-            className="mt-4 px-6 py-3 bg-brand-purple rounded-xl text-white font-semibold"
+            className="mt-4 px-6 py-3 bg-orange-500 rounded-xl text-white font-semibold shadow-sm hover:bg-orange-600 transition"
           >
             Back to Dashboard
           </button>
@@ -929,34 +929,34 @@ export default function InterviewRoomPage() {
 
   if (phase === "completed")
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-6 text-center max-w-md px-4">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-brand-purple to-brand-neon flex items-center justify-center shadow-[0_0_40px_rgba(168,85,247,0.5)]">
+          <div className="w-24 h-24 rounded-full bg-[linear-gradient(to_bottom_right,var(--color-orange-400),var(--color-orange-600))] flex items-center justify-center shadow-[0_0_40px_rgba(249,115,22,0.3)]">
             <Trophy className="w-12 h-12 text-white" />
           </div>
-          <h1 className="text-3xl font-extrabold text-white">
+          <h1 className="text-3xl font-extrabold text-slate-900">
             Interview Complete!
           </h1>
-          <p className="text-slate-400">
+          <p className="text-slate-600 font-medium">
             You answered {answeredCount} questions with an average score of{" "}
-            <span className="text-brand-neon font-bold">{avgScore}%</span>
+            <span className="text-orange-600 font-bold">{avgScore}%</span>
           </p>
           {reportId ? (
             <button
               onClick={() => router.push(`/report/${reportId}`)}
-              className="mt-2 px-8 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-2xl text-white font-bold text-lg hover:opacity-90 transition"
+              className="mt-2 px-8 py-4 bg-[linear-gradient(to_right,var(--color-orange-400),var(--color-orange-600))] rounded-2xl text-white font-bold text-lg hover:opacity-90 transition shadow-md"
             >
               View Full Report →
             </button>
           ) : (
-            <div className="flex items-center gap-2 text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin" />
+            <div className="flex items-center gap-2 text-slate-500 font-medium">
+              <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
               Generating your report...
             </div>
           )}
           <button
             onClick={() => router.push("/dashboard")}
-            className="text-slate-500 hover:text-slate-300 text-sm transition"
+            className="text-slate-500 hover:text-slate-700 text-sm font-semibold transition"
           >
             Back to Dashboard
           </button>
@@ -965,21 +965,21 @@ export default function InterviewRoomPage() {
     );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
       {/* Top Bar */}
-      <div className="border-b border-slate-800/60 bg-slate-900/50 backdrop-blur px-6 py-4 flex items-center justify-between">
+      <div className="border-b border-slate-200 bg-white/80 backdrop-blur px-6 py-4 flex items-center justify-between shadow-sm relative z-10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-purple to-brand-neon flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-[linear-gradient(to_bottom_right,var(--color-orange-400),var(--color-orange-600))] flex items-center justify-center shadow-sm">
             <Brain className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-white">
+          <span className="font-bold text-slate-900">
             InterVR{" "}
             <span className="text-slate-500 font-normal text-sm">
               / Live Session
             </span>
           </span>
         </div>
-        <div className="flex items-center gap-6 text-sm text-slate-400">
+        <div className="flex items-center gap-6 text-sm text-slate-600 font-medium">
           <div className="flex items-center gap-1.5">
             <Clock className="w-4 h-4" />
             <span className="font-mono">{formatTime(elapsedSeconds)}</span>
@@ -992,7 +992,7 @@ export default function InterviewRoomPage() {
             </span>
           </div>
           {answeredCount > 0 && (
-            <div className="flex items-center gap-1.5 text-brand-neon">
+            <div className="flex items-center gap-1.5 text-emerald-600">
               <CheckCircle2 className="w-4 h-4" />
               <span className="font-bold">{avgScore}%</span>
             </div>
@@ -1037,58 +1037,58 @@ export default function InterviewRoomPage() {
           )}
 
           {/* Anti-Cheat Overlay */}
-          <div className="flex items-center gap-4 border-l border-slate-700 pl-4 ml-2">
+          <div className="flex items-center gap-4 border-l border-slate-200 pl-4 ml-2">
             <div className="relative">
               <video
                 ref={antiCheatVideoRef}
                 autoPlay
                 playsInline
                 muted
-                className="w-24 h-16 rounded-lg object-cover bg-slate-900 border border-slate-800 shadow-inner"
+                className="w-24 h-16 rounded-lg object-cover bg-slate-100 border border-slate-200 shadow-inner"
               />
               {!antiCheatStatus.isReady && webcamEnabled && (
-                <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-lg">
-                  <Loader2 className="w-5 h-5 text-brand-purple animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-100/80 rounded-lg">
+                  <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col gap-1 w-32 border border-slate-700/50 bg-slate-900/40 p-2 rounded relative overflow-hidden">
+            <div className="flex flex-col gap-1 w-32 border border-slate-200 bg-white/60 shadow-sm p-2 rounded relative overflow-hidden backdrop-blur-sm">
               {antiCheatStatus.isFlagged && (
                 <div className="absolute inset-0 bg-red-500/10 animate-pulse pointer-events-none" />
               )}
               <div className="flex items-center justify-between text-[10px] font-mono">
-                <span className="text-slate-400">YAW</span>
+                <span className="text-slate-500">YAW</span>
                 <span
                   className={
                     Math.abs(antiCheatStatus.yaw) > 15
-                      ? "text-red-400 font-bold"
-                      : "text-slate-300"
+                      ? "text-red-500 font-bold"
+                      : "text-slate-700"
                   }
                 >
                   {antiCheatStatus.yaw.toFixed(0)}°
                 </span>
               </div>
               <div className="flex items-center justify-between text-[10px] font-mono">
-                <span className="text-slate-400">PITCH</span>
+                <span className="text-slate-500">PITCH</span>
                 <span
                   className={
                     Math.abs(antiCheatStatus.pitch) > 12
-                      ? "text-red-400 font-bold"
-                      : "text-slate-300"
+                      ? "text-red-500 font-bold"
+                      : "text-slate-700"
                   }
                 >
                   {antiCheatStatus.pitch.toFixed(0)}°
                 </span>
               </div>
-              <div className="flex items-center justify-between text-[10px] font-mono mt-0.5 pt-0.5 border-t border-slate-700">
-                <span className="text-slate-400 flex items-center gap-1">
+              <div className="flex items-center justify-between text-[10px] font-mono mt-0.5 pt-0.5 border-t border-slate-200">
+                <span className="text-slate-500 flex items-center gap-1">
                   <Activity className="w-3 h-3" /> GAZE
                 </span>
                 {antiCheatStatus.isGazeOffCenter ? (
                   <AlertTriangle className="w-3 h-3 text-red-500 animate-pulse" />
                 ) : (
-                  <span className="text-brand-neon/80">OK</span>
+                  <span className="text-emerald-600 font-semibold">OK</span>
                 )}
               </div>
             </div>
@@ -1097,9 +1097,9 @@ export default function InterviewRoomPage() {
       </div>
 
       {/* Progress Bar */}
-      <div className="h-1 bg-slate-800">
+      <div className="h-1 bg-slate-200 z-10 relative">
         <div
-          className="h-full bg-gradient-to-r from-brand-purple to-brand-neon transition-all duration-700"
+          className="h-full bg-[linear-gradient(to_right,var(--color-orange-400),var(--color-orange-600))] transition-all duration-700"
           style={{ width: `${progressPct}%` }}
         />
       </div>
@@ -1127,47 +1127,47 @@ export default function InterviewRoomPage() {
               )}
 
               {/* Question Display */}
-              <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-3 backdrop-blur">
+              <div className="w-full bg-white/80 border border-slate-200 shadow-sm rounded-2xl p-6 space-y-3 backdrop-blur">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-brand-purple">
+                  <span className="text-xs font-bold uppercase tracking-wider text-orange-600">
                     {isFollowup ? "Follow-up" : `Question ${currentQIndex + 1}`}
                   </span>
-                  <span className="text-xs px-2 py-0.5 bg-slate-800 rounded-full text-slate-400">
+                  <span className="text-xs px-2 py-0.5 bg-slate-100 rounded-full text-slate-600 font-medium border border-slate-200">
                     {currentQuestion.category}
                   </span>
-                  <span className="text-xs px-2 py-0.5 bg-slate-800 rounded-full text-slate-400">
+                  <span className="text-xs px-2 py-0.5 bg-slate-100 rounded-full text-slate-600 font-medium border border-slate-200">
                     {currentQuestion.difficulty}
                   </span>
                 </div>
-                <p className="text-white text-lg font-medium leading-relaxed">
+                <p className="text-slate-900 text-lg font-bold leading-relaxed">
                   {isFollowup ? followupText : currentQuestion.question}
                 </p>
               </div>
 
               {/* Live Browser Activity Log */}
               {browserAntiCheat.events.length > 0 && (
-                <div className="w-full bg-slate-900/40 border border-slate-800/60 rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 border-b border-slate-800/60 flex items-center gap-2">
+                <div className="w-full bg-white/60 border border-slate-200 shadow-sm rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 border-b border-slate-200 flex items-center gap-2 bg-slate-50/50">
                     <Activity className="w-3.5 h-3.5 text-slate-500" />
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Activity Log</span>
+                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Activity Log</span>
                   </div>
-                  <ul className="divide-y divide-slate-800/40 max-h-32 overflow-y-auto">
+                  <ul className="divide-y divide-slate-100 max-h-32 overflow-y-auto">
                     {[...browserAntiCheat.events].reverse().slice(0, 8).map((event, i) => (
-                      <li key={i} className="flex items-center justify-between px-3 py-1.5">
+                      <li key={i} className="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50/50 transition-colors">
                         <div className="flex items-center gap-2">
-                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${event.type === "tab_hidden" || event.type === "window_blur" ? "bg-red-400" :
-                              event.type === "paste" ? "bg-purple-400" :
-                                "bg-emerald-400"
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${event.type === "tab_hidden" || event.type === "window_blur" ? "bg-red-500" :
+                              event.type === "paste" ? "bg-orange-500" :
+                                "bg-emerald-500"
                             }`} />
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-600 font-medium">
                             {event.type === "tab_hidden" && "Tab switched away"}
                             {event.type === "tab_visible" && "Returned to tab"}
                             {event.type === "window_blur" && "Window lost focus"}
                             {event.type === "window_focus" && "Window focused"}
-                            {event.type === "paste" && `Pasted: "${event.detail}"`}
+                            {event.type === "paste" && `Pasted text`}
                           </span>
                         </div>
-                        <span className="text-[10px] text-slate-600 font-mono tabular-nums">
+                        <span className="text-[10px] text-slate-500 font-mono tabular-nums">
                           {new Date(event.timestamp).toLocaleTimeString("en-US", {
                             hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit"
                           })}
@@ -1180,13 +1180,13 @@ export default function InterviewRoomPage() {
 
               {phase === "speaking" && (
                 <div className="flex flex-col items-center gap-4">
-                  <div className="flex items-center gap-2 px-5 py-3 bg-brand-purple/10 border border-brand-purple/30 rounded-full">
-                    <Volume2 className="w-5 h-5 text-brand-purple animate-pulse" />
-                    <span className="text-brand-purple text-sm font-medium">AI Interviewer is speaking...</span>
+                  <div className="flex items-center gap-2 px-5 py-3 bg-orange-500/10 border border-orange-500/30 rounded-full shadow-sm">
+                    <Volume2 className="w-5 h-5 text-orange-600 animate-pulse" />
+                    <span className="text-orange-600 text-sm font-semibold">AI Interviewer is speaking...</span>
                   </div>
                   <div className="flex items-center gap-1">
                     {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} className="w-1 bg-brand-purple rounded-full animate-bounce" style={{ height: `${8 + (i % 3) * 8}px`, animationDelay: `${i * 0.1}s` }} />
+                      <div key={i} className="w-1 bg-orange-500 rounded-full animate-bounce" style={{ height: `${8 + (i % 3) * 8}px`, animationDelay: `${i * 0.1}s` }} />
                     ))}
                   </div>
                 </div>
@@ -1194,11 +1194,11 @@ export default function InterviewRoomPage() {
 
               {phase === "listening" && (
                 <div className="flex flex-col items-center gap-5">
-                  <p className="text-slate-400 text-sm">Your turn to answer. Press the button to start recording.</p>
-                  <button onClick={startRecording} className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-purple to-brand-neon flex items-center justify-center shadow-[0_0_40px_rgba(168,85,247,0.5)] hover:shadow-[0_0_60px_rgba(217,70,239,0.7)] transition-all hover:scale-105">
+                  <p className="text-slate-600 font-medium text-sm">Your turn to answer. Press the button to start recording.</p>
+                  <button onClick={startRecording} className="w-20 h-20 rounded-full bg-[linear-gradient(to_bottom_right,var(--color-orange-400),var(--color-orange-600))] flex items-center justify-center shadow-[0_0_40px_rgba(249,115,22,0.4)] hover:shadow-[0_0_60px_rgba(249,115,22,0.6)] transition-all hover:scale-105">
                     <Mic className="w-8 h-8 text-white" />
                   </button>
-                  <p className="text-xs text-slate-600">Press & hold, or click to start</p>
+                  <p className="text-xs text-slate-500 font-medium">Press & hold, or click to start</p>
                 </div>
               )}
 
@@ -1222,9 +1222,9 @@ export default function InterviewRoomPage() {
 
               {phase === "processing" && (
                 <div className="flex flex-col items-center gap-4">
-                  <div className="flex items-center gap-3 px-6 py-3 bg-slate-900 border border-slate-700 rounded-xl">
-                    <Loader2 className="w-5 h-5 text-brand-purple animate-spin" />
-                    <span className="text-slate-300 text-sm">Transcribing and grading your answer...</span>
+                  <div className="flex items-center gap-3 px-6 py-3 bg-white border border-slate-200 shadow-sm rounded-xl">
+                    <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+                    <span className="text-slate-700 font-medium text-sm">Transcribing and grading your answer...</span>
                   </div>
                 </div>
               )}
@@ -1232,24 +1232,24 @@ export default function InterviewRoomPage() {
               {phase === "feedback" && grading && (
                 <div className="w-full space-y-4">
                   {transcript && (
-                    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-                      <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-semibold">Your Answer (Transcribed)</p>
-                      <p className="text-slate-300 text-sm leading-relaxed">{transcript}</p>
+                    <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+                      <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-bold">Your Answer (Transcribed)</p>
+                      <p className="text-slate-700 text-sm font-medium leading-relaxed">{transcript}</p>
                     </div>
                   )}
                   <div className="grid grid-cols-3 gap-3">
-                    {[{ label: "Accuracy", value: grading.accuracy_score, color: "text-blue-400" }, { label: "Depth", value: grading.depth_score, color: "text-brand-purple" }, { label: "Communication", value: grading.communication_score, color: "text-brand-neon" }].map(({ label, value, color }) => (
-                      <div key={label} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                        <div className={`text-2xl font-extrabold ${color}`}>{value}<span className="text-sm text-slate-500">/10</span></div>
-                        <div className="text-xs text-slate-500 mt-1">{label}</div>
+                    {[{ label: "Accuracy", value: grading.accuracy_score, color: "text-blue-500" }, { label: "Depth", value: grading.depth_score, color: "text-orange-500" }, { label: "Communication", value: grading.communication_score, color: "text-orange-600" }].map(({ label, value, color }) => (
+                      <div key={label} className="bg-slate-50 border border-slate-200 shadow-sm rounded-xl p-4 text-center">
+                        <div className={`text-2xl font-black ${color}`}>{value}<span className="text-sm text-slate-500">/10</span></div>
+                        <div className="text-xs text-slate-600 font-semibold mt-1">{label}</div>
                       </div>
                     ))}
                   </div>
-                  <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-                    <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">AI Feedback</p>
-                    <p className="text-slate-300 text-sm leading-relaxed">{grading.feedback}</p>
+                  <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+                    <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-bold">AI Feedback</p>
+                    <p className="text-slate-700 text-sm font-medium leading-relaxed">{grading.feedback}</p>
                   </div>
-                  <button onClick={proceedNext} className="w-full flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-xl text-white font-bold hover:opacity-90 transition">
+                  <button onClick={proceedNext} className="w-full flex items-center justify-center gap-2 py-4 bg-[linear-gradient(to_right,var(--color-orange-400),var(--color-orange-600))] shadow-md rounded-xl text-white font-bold hover:opacity-90 transition">
                     {currentQIndex + 1 >= questions.length ? "Finish Interview" : grading.needs_followup ? "Answer Follow-up" : "Next Question"}
                     <ChevronRight className="w-5 h-5" />
                   </button>
@@ -1258,16 +1258,16 @@ export default function InterviewRoomPage() {
 
               {/* Code counter question banner */}
               {isCodeCounterActive && (
-                <div className="bg-purple-500/10 border border-purple-500/40 rounded-xl p-4 text-sm text-purple-400">
-                  <p className="font-semibold mb-1">📣 Answer verbally:</p>
-                  <p>{codeCounterQuestion}</p>
+                <div className="bg-orange-500/10 border border-orange-500/40 rounded-xl p-4 text-sm text-orange-700">
+                  <p className="font-bold mb-1">📣 Answer verbally:</p>
+                  <p className="font-medium">{codeCounterQuestion}</p>
                 </div>
               )}
             </div>
           </Panel>
 
           {/* RESIZE HANDLE */}
-          <PanelResizeHandle className="w-1.5 bg-slate-800 hover:bg-purple-500/50 transition-colors cursor-col-resize" />
+          <PanelResizeHandle className="w-1.5 bg-slate-200 hover:bg-orange-400/50 transition-colors cursor-col-resize relative z-20" />
 
           {/* RIGHT PANEL — Code Sandbox */}
           <Panel defaultSize="60%" minSize="40%">
@@ -1296,14 +1296,14 @@ export default function InterviewRoomPage() {
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 max-w-3xl mx-auto w-full gap-8">
           {phase === "ready" && (
             <div className="text-center space-y-6">
-              <div className="w-20 h-20 rounded-full bg-brand-purple/20 flex items-center justify-center mx-auto border border-brand-purple/30">
-                <Brain className="w-10 h-10 text-brand-purple" />
+              <div className="w-20 h-20 rounded-full bg-orange-100 flex items-center justify-center mx-auto border border-orange-200 shadow-sm">
+                <Brain className="w-10 h-10 text-orange-500" />
               </div>
-              <h2 className="text-2xl font-bold text-white">Ready to Begin?</h2>
-              <p className="text-slate-400">
+              <h2 className="text-2xl font-bold text-slate-900">Ready to Begin?</h2>
+              <p className="text-slate-600 font-medium">
                 {session?.topic} • {session?.difficulty} • {session?.duration}
               </p>
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-500 text-sm">
                 {questions.length} questions prepared. The AI interviewer will
                 speak each question aloud.
               </p>
@@ -1316,7 +1316,7 @@ export default function InterviewRoomPage() {
               </div>
               <button
                 onClick={startInterview}
-                className="px-10 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-2xl text-white font-bold text-lg hover:opacity-90 transition shadow-[0_0_30px_rgba(168,85,247,0.4)]"
+                className="px-10 py-4 bg-[linear-gradient(to_right,var(--color-orange-400),var(--color-orange-600))] rounded-2xl text-white font-bold text-lg hover:opacity-90 transition shadow-md"
               >
                 Start Interview
               </button>
@@ -1346,47 +1346,47 @@ export default function InterviewRoomPage() {
                   </div>
                 )}
 
-                <div className="w-full bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-3 backdrop-blur">
+                <div className="w-full bg-white/80 border border-slate-200 shadow-sm rounded-2xl p-6 space-y-3 backdrop-blur">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-brand-purple">
+                    <span className="text-xs font-bold uppercase tracking-wider text-orange-600">
                       {isFollowup ? "Follow-up" : `Question ${currentQIndex + 1}`}
                     </span>
-                    <span className="text-xs px-2 py-0.5 bg-slate-800 rounded-full text-slate-400">
+                    <span className="text-xs px-2 py-0.5 bg-slate-100 rounded-full text-slate-600 font-medium border border-slate-200">
                       {currentQuestion.category}
                     </span>
-                    <span className="text-xs px-2 py-0.5 bg-slate-800 rounded-full text-slate-400">
+                    <span className="text-xs px-2 py-0.5 bg-slate-100 rounded-full text-slate-600 font-medium border border-slate-200">
                       {currentQuestion.difficulty}
                     </span>
                   </div>
-                  <p className="text-white text-lg font-medium leading-relaxed">
+                  <p className="text-slate-900 text-lg font-bold leading-relaxed">
                     {isFollowup ? followupText : currentQuestion.question}
                   </p>
                 </div>
 
                 {/* Live Browser Activity Log */}
                 {browserAntiCheat.events.length > 0 && (
-                  <div className="w-full bg-slate-900/40 border border-slate-800/60 rounded-xl overflow-hidden">
-                    <div className="px-3 py-2 border-b border-slate-800/60 flex items-center gap-2">
+                  <div className="w-full bg-white/60 border border-slate-200 shadow-sm rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 border-b border-slate-200 flex items-center gap-2 bg-slate-50/50">
                       <Activity className="w-3.5 h-3.5 text-slate-500" />
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Activity Log</span>
+                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Activity Log</span>
                     </div>
-                    <ul className="divide-y divide-slate-800/40 max-h-32 overflow-y-auto">
+                    <ul className="divide-y divide-slate-100 max-h-32 overflow-y-auto">
                       {[...browserAntiCheat.events].reverse().slice(0, 8).map((event, i) => (
-                        <li key={i} className="flex items-center justify-between px-3 py-1.5">
+                        <li key={i} className="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50/50 transition-colors">
                           <div className="flex items-center gap-2">
-                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${event.type === "tab_hidden" || event.type === "window_blur" ? "bg-red-400" :
-                                event.type === "paste" ? "bg-purple-400" :
-                                  "bg-emerald-400"
+                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${event.type === "tab_hidden" || event.type === "window_blur" ? "bg-red-500" :
+                                event.type === "paste" ? "bg-orange-500" :
+                                  "bg-emerald-500"
                               }`} />
-                            <span className="text-xs text-slate-400">
+                            <span className="text-xs text-slate-600 font-medium">
                               {event.type === "tab_hidden" && "Tab switched away"}
                               {event.type === "tab_visible" && "Returned to tab"}
                               {event.type === "window_blur" && "Window lost focus"}
                               {event.type === "window_focus" && "Window focused"}
-                              {event.type === "paste" && `Pasted: "${event.detail}"`}
+                              {event.type === "paste" && `Pasted text`}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-600 font-mono tabular-nums">
+                          <span className="text-[10px] text-slate-500 font-mono tabular-nums">
                             {new Date(event.timestamp).toLocaleTimeString("en-US", {
                               hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit"
                             })}
@@ -1399,9 +1399,9 @@ export default function InterviewRoomPage() {
 
                 {phase === "speaking" && (
                   <div className="flex flex-col items-center gap-4">
-                    <div className="flex items-center gap-2 px-5 py-3 bg-brand-purple/10 border border-brand-purple/30 rounded-full">
-                      <Volume2 className="w-5 h-5 text-brand-purple animate-pulse" />
-                      <span className="text-brand-purple text-sm font-medium">
+                    <div className="flex items-center gap-2 px-5 py-3 bg-orange-500/10 border border-orange-500/30 rounded-full shadow-sm">
+                      <Volume2 className="w-5 h-5 text-orange-600 animate-pulse" />
+                      <span className="text-orange-600 text-sm font-semibold">
                         AI Interviewer is speaking...
                       </span>
                     </div>
@@ -1409,7 +1409,7 @@ export default function InterviewRoomPage() {
                       {[1, 2, 3, 4, 5].map((i) => (
                         <div
                           key={i}
-                          className="w-1 bg-brand-purple rounded-full animate-bounce"
+                          className="w-1 bg-orange-500 rounded-full animate-bounce"
                           style={{
                             height: `${8 + (i % 3) * 8}px`,
                             animationDelay: `${i * 0.1}s`,
@@ -1422,16 +1422,16 @@ export default function InterviewRoomPage() {
 
                 {phase === "listening" && (
                   <div className="flex flex-col items-center gap-5">
-                    <p className="text-slate-400 text-sm">
+                    <p className="text-slate-600 font-medium text-sm">
                       Your turn to answer. Press the button to start recording.
                     </p>
                     <button
                       onClick={startRecording}
-                      className="w-20 h-20 rounded-full bg-gradient-to-br from-brand-purple to-brand-neon flex items-center justify-center shadow-[0_0_40px_rgba(168,85,247,0.5)] hover:shadow-[0_0_60px_rgba(217,70,239,0.7)] transition-all hover:scale-105"
+                      className="w-20 h-20 rounded-full bg-[linear-gradient(to_bottom_right,var(--color-orange-400),var(--color-orange-600))] flex items-center justify-center shadow-[0_0_40px_rgba(249,115,22,0.4)] hover:shadow-[0_0_60px_rgba(249,115,22,0.6)] transition-all hover:scale-105"
                     >
                       <Mic className="w-8 h-8 text-white" />
                     </button>
-                    <p className="text-xs text-slate-600">
+                    <p className="text-xs text-slate-500 font-medium">
                       Press & hold, or click to start
                     </p>
                   </div>
@@ -1469,9 +1469,9 @@ export default function InterviewRoomPage() {
 
                 {phase === "processing" && (
                   <div className="flex flex-col items-center gap-4">
-                    <div className="flex items-center gap-3 px-6 py-3 bg-slate-900 border border-slate-700 rounded-xl">
-                      <Loader2 className="w-5 h-5 text-brand-purple animate-spin" />
-                      <span className="text-slate-300 text-sm">
+                    <div className="flex items-center gap-3 px-6 py-3 bg-white border border-slate-200 shadow-sm rounded-xl">
+                      <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+                      <span className="text-slate-700 font-medium text-sm">
                         Transcribing and grading your answer...
                       </span>
                     </div>
@@ -1481,11 +1481,11 @@ export default function InterviewRoomPage() {
                 {phase === "feedback" && grading && (
                   <div className="w-full space-y-4">
                     {transcript && (
-                      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-                        <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-semibold">
+                      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+                        <p className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-bold">
                           Your Answer (Transcribed)
                         </p>
-                        <p className="text-slate-300 text-sm leading-relaxed">
+                        <p className="text-slate-700 text-sm font-medium leading-relaxed">
                           {transcript}
                         </p>
                       </div>
@@ -1493,32 +1493,32 @@ export default function InterviewRoomPage() {
 
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { label: "Accuracy", value: grading.accuracy_score, color: "text-blue-400" },
-                        { label: "Depth", value: grading.depth_score, color: "text-brand-purple" },
-                        { label: "Communication", value: grading.communication_score, color: "text-brand-neon" },
+                        { label: "Accuracy", value: grading.accuracy_score, color: "text-blue-500" },
+                        { label: "Depth", value: grading.depth_score, color: "text-orange-500" },
+                        { label: "Communication", value: grading.communication_score, color: "text-orange-600" },
                       ].map(({ label, value, color }) => (
-                        <div key={label} className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-center">
-                          <div className={`text-2xl font-extrabold ${color}`}>
+                        <div key={label} className="bg-slate-50 border border-slate-200 shadow-sm rounded-xl p-4 text-center">
+                          <div className={`text-2xl font-black ${color}`}>
                             {value}
                             <span className="text-sm text-slate-500">/10</span>
                           </div>
-                          <div className="text-xs text-slate-500 mt-1">{label}</div>
+                          <div className="text-xs text-slate-600 font-semibold mt-1">{label}</div>
                         </div>
                       ))}
                     </div>
 
-                    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-                      <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">
+                    <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+                      <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-bold">
                         AI Feedback
                       </p>
-                      <p className="text-slate-300 text-sm leading-relaxed">
+                      <p className="text-slate-700 text-sm font-medium leading-relaxed">
                         {grading.feedback}
                       </p>
                     </div>
 
                     <button
                       onClick={proceedNext}
-                      className="w-full flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-brand-purple to-brand-neon rounded-xl text-white font-bold hover:opacity-90 transition"
+                      className="w-full flex items-center justify-center gap-2 py-4 bg-[linear-gradient(to_right,var(--color-orange-400),var(--color-orange-600))] shadow-md rounded-xl text-white font-bold hover:opacity-90 transition"
                     >
                       {currentQIndex + 1 >= questions.length
                         ? "Finish Interview"
