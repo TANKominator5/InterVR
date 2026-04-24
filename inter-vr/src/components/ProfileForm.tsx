@@ -182,15 +182,15 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto bg-white/70 border border-slate-200 rounded-3xl p-8 md:p-10 shadow-xl relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
+    <div className="w-full max-w-3xl mx-auto bg-card border border-border rounded-3xl p-8 md:p-10 shadow-xl relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-500/10 rounded-full blur-[80px] -ml-24 -mb-24 pointer-events-none" />
 
       <div className="mb-10 text-center relative z-10">
-        <h2 className="text-3xl font-extrabold text-slate-900 mb-2 tracking-tight">
+        <h2 className="text-3xl font-extrabold text-foreground mb-2 tracking-tight">
           Edit Profile
         </h2>
-        <p className="text-slate-600">
+        <p className="text-muted-foreground">
           Keep your academic context up to date for the best AI interview
           experience.
         </p>
@@ -202,21 +202,21 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
       >
         {/* Step 1: Basic Personal Info */}
         <div className="space-y-6">
-          <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
-            <UserIcon className="w-5 h-5 text-orange-500" />
-            <h3 className="text-lg font-semibold text-slate-800">
+          <div className="flex items-center gap-3 border-b border-border pb-2">
+            <UserIcon className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-semibold text-foreground">
               Personal Details
             </h3>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Full Name
               </label>
               <input
                 {...register("fullName")}
-                className={`w-full bg-white border ${errors.fullName ? "border-red-500" : "border-slate-300"} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all`}
+                className={`w-full bg-background border ${errors.fullName ? "border-red-500" : "border-border"} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all`}
                 placeholder="John Doe"
               />
               {errors.fullName && (
@@ -227,12 +227,12 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Country
               </label>
               <input
                 {...register("country")}
-                className={`w-full bg-white border ${errors.country ? "border-red-500" : "border-slate-300"} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all`}
+                className={`w-full bg-background border ${errors.country ? "border-red-500" : "border-border"} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all`}
                 placeholder="India"
               />
               {errors.country && (
@@ -243,12 +243,12 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 State / Region
               </label>
               <input
                 {...register("state")}
-                className={`w-full bg-white border ${errors.state ? "border-red-500" : "border-slate-300"} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all`}
+                className={`w-full bg-background border ${errors.state ? "border-red-500" : "border-border"} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all`}
                 placeholder="Maharashtra"
               />
               {errors.state && (
@@ -262,21 +262,21 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
         {/* Step 2: Academy Info */}
         <div className="space-y-6">
-          <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
-            <GraduationCap className="w-5 h-5 text-orange-500" />
-            <h3 className="text-lg font-semibold text-slate-800">
+          <div className="flex items-center gap-3 border-b border-border pb-2">
+            <GraduationCap className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-semibold text-foreground">
               Academic Background
             </h3>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Institution / University Name
               </label>
               <input
                 {...register("institutionName")}
-                className={`w-full bg-white border ${errors.institutionName ? "border-red-500" : "border-slate-300"} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all`}
+                className={`w-full bg-background border ${errors.institutionName ? "border-red-500" : "border-border"} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all`}
                 placeholder="Harvard University..."
               />
               {errors.institutionName && (
@@ -287,12 +287,12 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Year of Study
               </label>
               <select
                 {...register("yearOfStudy")}
-                className={`w-full bg-white border ${errors.yearOfStudy ? "border-red-500" : "border-slate-300"} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all appearance-none`}
+                className={`w-full bg-background border ${errors.yearOfStudy ? "border-red-500" : "border-border"} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all appearance-none`}
               >
                 <option value="" disabled>
                   Select year
@@ -311,14 +311,14 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
                 Current CGPA
               </label>
               <input
                 type="number"
                 step="0.01"
                 {...register("cgpa", { valueAsNumber: true })}
-                className={`w-full bg-white border ${errors.cgpa ? "border-red-500" : "border-slate-300"} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all`}
+                className={`w-full bg-background border ${errors.cgpa ? "border-red-500" : "border-border"} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all`}
                 placeholder="e.g. 8.5"
               />
               {errors.cgpa && (
@@ -332,20 +332,20 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
         {/* Step 3: Interview Target & Upload */}
         <div className="space-y-6">
-          <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
-            <FileText className="w-5 h-5 text-orange-500" />
-            <h3 className="text-lg font-semibold text-slate-800">
+          <div className="flex items-center gap-3 border-b border-border pb-2">
+            <FileText className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-semibold text-foreground">
               Interview Context
             </h3>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Target Role
             </label>
             <select
               {...register("techStack")}
-              className={`w-full bg-white border ${errors.techStack ? "border-red-500" : "border-slate-300"} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all appearance-none`}
+              className={`w-full bg-background border ${errors.techStack ? "border-red-500" : "border-border"} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all appearance-none`}
             >
               <option value="" disabled>
                 Select a role
@@ -364,16 +364,16 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
           </div>
 
           <div className="pt-2">
-            <label className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Update Resume (PDF) - Optional
             </label>
             <div
               className={`border-2 border-dashed rounded-3xl p-10 text-center transition-all ${
                 isDragging
-                  ? "border-orange-500 bg-orange-50"
+                  ? "border-primary bg-primary/10"
                   : file || initialData?.resume_url
-                    ? "border-emerald-500 bg-emerald-50"
-                    : "border-slate-300 bg-slate-50 hover:border-orange-400 hover:bg-orange-50/50"
+                    ? "border-emerald-500 bg-emerald-500/10"
+                    : "border-border bg-muted/50 hover:border-primary/50 hover:bg-muted"
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -390,14 +390,14 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
 
               {file || initialData?.resume_url ? (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-2 shadow-sm">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 mb-2 shadow-sm">
                     <CheckCircle2 className="w-8 h-8" />
                   </div>
-                  <div className="text-slate-900 font-medium">
+                  <div className="text-foreground font-medium">
                     {file ? file.name : "Resume currently uploaded"}
                   </div>
                   {file && (
-                    <div className="text-sm text-slate-500 mb-4">
+                    <div className="text-sm text-muted-foreground mb-4">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </div>
                   )}
@@ -408,21 +408,21 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
                       setFile(null);
                       if (!file) fileInputRef.current?.click();
                     }}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm transition-colors mt-2"
+                    className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg text-sm transition-colors mt-2"
                   >
                     {file ? "Remove New File" : "Upload Different Resume"}
                   </button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-4 cursor-pointer">
-                  <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-orange-500 group-hover:bg-orange-100 transition-colors">
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
                     <UploadCloud className="w-8 h-8" />
                   </div>
                   <div>
-                    <div className="text-slate-900 font-medium mb-1">
+                    <div className="text-foreground font-medium mb-1">
                       Click to upload or drag and drop
                     </div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm text-muted-foreground">
                       PDFs only (Max 5MB)
                     </div>
                   </div>
@@ -437,7 +437,7 @@ export function ProfileForm({ initialData }: ProfileFormProps) {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-linear-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 hover:delay-200 text-white font-bold rounded-2xl transition-all shadow-lg hover:shadow-orange-500/30 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-70 disabled:cursor-not-allowed text-lg"
+            className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-2xl transition-all shadow-lg hover:shadow-primary/30 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background disabled:opacity-70 disabled:cursor-not-allowed text-lg"
           >
             {isSubmitting ? (
               <>

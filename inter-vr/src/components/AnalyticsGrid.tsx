@@ -123,22 +123,22 @@ export default function AnalyticsGrid() {
   return (
     <div className="space-y-4">
       {/* 1. User Identity Card */}
-      <Card className="bg-white/80 border-white/40 shadow-xl backdrop-blur-xl rounded-[2rem] overflow-hidden border-b-4 border-b-orange-400">
+      <Card className="bg-card border-border shadow-xl backdrop-blur-xl rounded-[2rem] overflow-hidden border-b-4 border-b-primary">
         <CardContent className="pt-8 pb-6 flex flex-col items-center">
-          <Avatar className="h-24 w-24 border-4 border-white shadow-2xl mb-4">
+          <Avatar className="h-24 w-24 border-4 border-background shadow-2xl mb-4">
             <AvatarImage src={userData?.avatar_url} />
-            <AvatarFallback className="bg-linear-to-br from-orange-400 to-orange-600 text-white text-2xl font-black">
+            <AvatarFallback className="bg-linear-to-br from-primary to-primary/80 text-primary-foreground text-2xl font-black">
               {getInitials(userData?.full_name)}
             </AvatarFallback>
           </Avatar>
-          <h2 className="text-xl font-black text-slate-900">
+          <h2 className="text-xl font-black text-foreground">
             {userData?.full_name || "User Name"}
           </h2>
-          <div className="flex items-center gap-2 mt-1 text-slate-500 text-sm font-medium">
-            <MapPin className="w-3.5 h-3.5 text-orange-500" />
+          <div className="flex items-center gap-2 mt-1 text-muted-foreground text-sm font-medium">
+            <MapPin className="w-3.5 h-3.5 text-primary" />
             {userData?.state || "Location not set"}
           </div>
-          <div className="mt-4 flex items-center gap-2 px-4 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold uppercase tracking-wider">
+          <div className="mt-4 flex items-center gap-2 px-4 py-1.5 bg-primary/20 text-primary rounded-full text-xs font-bold uppercase tracking-wider">
             <Briefcase className="w-3 h-3" />
             {userData?.tech_stack || "Not Specified"}
           </div>
@@ -148,65 +148,65 @@ export default function AnalyticsGrid() {
       {/* 2. All Performance Cards in a Stack */}
       <div className="grid grid-cols-1 gap-4">
         {/* Score Card */}
-        <Card className="bg-white/70 border-slate-200 shadow-md backdrop-blur-md">
+        <Card className="bg-card border-border shadow-md backdrop-blur-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
-              Avg. Score <Brain className="w-4 h-4 text-orange-500" />
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center justify-between">
+              Avg. Score <Brain className="w-4 h-4 text-primary" />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">
+            <div className="text-2xl font-black text-foreground">
               {stats.confidenceScore}%
             </div>
             <Progress
               value={stats.confidenceScore}
-              className="mt-2 h-1.5 bg-slate-200 [&>div]:bg-orange-500"
+              className="mt-2 h-1.5 bg-muted [&>div]:bg-primary"
             />
           </CardContent>
         </Card>
 
         {/* Gaze Card */}
-        <Card className="bg-white/70 border-slate-200 shadow-md backdrop-blur-md">
+        <Card className="bg-card border-border shadow-md backdrop-blur-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center justify-between">
               Gaze / Focus <Eye className="w-4 h-4 text-amber-500" />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">
+            <div className="text-2xl font-black text-foreground">
               {stats.gazeScore}%
             </div>
             <Progress
               value={stats.gazeScore}
-              className="mt-2 h-1.5 bg-slate-200 [&>div]:bg-amber-500"
+              className="mt-2 h-1.5 bg-muted [&>div]:bg-amber-500"
             />
           </CardContent>
         </Card>
 
         {/* Streak Card */}
-        <Card className="bg-white/70 border-slate-200 shadow-md backdrop-blur-md">
+        <Card className="bg-card border-border shadow-md backdrop-blur-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center justify-between">
               Streak <Flame className="w-4 h-4 text-orange-600" />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">
+            <div className="text-2xl font-black text-foreground">
               🔥 {stats.streak} Days
             </div>
           </CardContent>
         </Card>
 
         {/* Resume Card */}
-        <Card className="bg-white/70 border-slate-200 shadow-md backdrop-blur-md">
+        <Card className="bg-card border-border shadow-md backdrop-blur-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
-              Resume <FileText className="w-4 h-4 text-orange-500" />
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center justify-between">
+              Resume <FileText className="w-4 h-4 text-primary" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div
-              className={`text-lg font-black ${userData?.resume_url ? "text-emerald-600" : "text-red-500"}`}
+              className={`text-lg font-black ${userData?.resume_url ? "text-emerald-500" : "text-red-500"}`}
             >
               {userData?.resume_url ? "Parsed & Active" : "Missing"}
             </div>
@@ -214,14 +214,14 @@ export default function AnalyticsGrid() {
         </Card>
 
         {/* Mocks Card */}
-        <Card className="bg-white/70 border-slate-200 shadow-md backdrop-blur-md">
+        <Card className="bg-card border-border shadow-md backdrop-blur-md">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
-              Completed <History className="w-4 h-4 text-slate-600" />
+            <CardTitle className="text-xs font-bold text-muted-foreground uppercase flex items-center justify-between">
+              Completed <History className="w-4 h-4 text-muted-foreground" />
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">
+            <div className="text-2xl font-black text-foreground">
               {stats.totalMocks} Sessions
             </div>
           </CardContent>

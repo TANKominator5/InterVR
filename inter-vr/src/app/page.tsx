@@ -23,7 +23,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-background">
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-24 pb-32 lg:pt-36 lg:pb-40 bg-gradient-to-br from-background via-background to-secondary/20">
         {/* Background glow effects - Adjusted for Light Theme */}
@@ -130,7 +130,7 @@ export default function Home() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-32 relative bg-secondary/30">
+      <section id="features" className="py-32 relative bg-background">
         <div className="container mx-auto px-4">
           <div className="text-center max-w-3xl mx-auto mb-20">
             <h2 className="text-3xl md:text-5xl font-bold mb-6 text-foreground">
