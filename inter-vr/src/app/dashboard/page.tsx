@@ -92,7 +92,7 @@ function StreakCalendar({ recentInterviews }: { recentInterviews: any[] }) {
       </div>
       <div className="grid grid-cols-7 gap-1 text-center">
         {DAY_LABELS.map((l) => (
-          <div key={l} className="text-[10px] font-medium text-slate-400 pb-1">
+          <div key={l} className="text-[10px] font-medium text-muted-foreground pb-1">
             {l}
           </div>
         ))}
@@ -104,13 +104,13 @@ function StreakCalendar({ recentInterviews }: { recentInterviews: any[] }) {
             <div
               key={day}
               className={`relative aspect-square flex items-center justify-center rounded-md text-[11px] font-medium transition-colors
-                ${isToday ? "ring-1 ring-orange-500 text-orange-600 font-bold" : ""}
-                ${isActive ? "bg-orange-500/20 text-orange-600" : "text-slate-500 hover:bg-slate-100"}
+                ${isToday ? "ring-1 ring-primary text-primary font-bold" : ""}
+                ${isActive ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-muted"}
               `}
             >
               {day}
               {isActive && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-orange-500" />
+                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
               )}
             </div>
           );
@@ -407,13 +407,13 @@ export default function DashboardPage() {
   const userAvatar = userData?.avatar_url;
 
   return (
-    <div className="relative min-h-screen bg-[linear-gradient(to_bottom_right,var(--color-blue-500),var(--color-blue-300),var(--color-orange-300),var(--color-orange-500))] text-slate-900 font-sans selection:bg-orange-500/30 overflow-x-hidden">
+    <div className="relative min-h-screen bg-background text-foreground font-sans selection:bg-primary/30 overflow-x-hidden">
       {/* Background glow effects */}
       {/* <div className="absolute h-full w-full bg-gradient-to-r from-primary/20 to-primary/30"></div> */}
       {/* Dashboard Content */}
       <div className="relative p-4 md:p-8 space-y-8 max-w-7xl mx-auto w-full z-10">
         <div className="mb-2 md:mb-4">
-          <h1 className="text-3xl md:text-5xl font-extrabold text-white drop-shadow-sm tracking-tight">
+          <h1 className="text-3xl md:text-5xl font-extrabold text-foreground drop-shadow-sm tracking-tight">
             Welcome back, {userFirstName}
           </h1>
         </div>
@@ -422,7 +422,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
           {/* Left: User Profile / Camera Card */}
           <Card
-            className="bg-white/80 border-slate-200 shadow-xl backdrop-blur-xl rounded-[2rem] relative overflow-hidden cursor-pointer group"
+            className="bg-card/80 border-border shadow-xl backdrop-blur-xl rounded-[2rem] relative overflow-hidden cursor-pointer group"
             onClick={() => setShowCamera((prev) => !prev)}
           >
             {/* <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-secondary to-transparent opacity-50" /> */}
@@ -446,8 +446,8 @@ export default function DashboardPage() {
                       className="size-full object-cover"
                     />
                   ) : (
-                    <div className="rounded-full aspect-square bg-linear-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-                      <span className="text-7xl font-black text-white">
+                    <div className="rounded-full aspect-square bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center">
+                      <span className="text-7xl font-black text-primary-foreground">
                         {userInitial}
                       </span>
                     </div>
@@ -467,21 +467,21 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="p-4 text-center w-full">
-                <p className="font-bold text-lg text-slate-900">
+                <p className="font-bold text-lg text-foreground">
                   {userData?.full_name || "Guest"}
                 </p>
-                <p className="text-xs text-slate-500 mt-1">{userRole}</p>
+                <p className="text-xs text-muted-foreground mt-1">{userRole}</p>
               </div>
             </CardContent>
           </Card>
 
           {/* Right: Primary Action Card */}
-          <Card className="relative overflow-hidden border-slate-200 bg-white/80 backdrop-blur-xl shadow-2xl rounded-[2rem]">
+          <Card className="relative overflow-hidden border-border bg-card/80 backdrop-blur-xl shadow-2xl rounded-[2rem]">
             <CardHeader className="text-center md:text-left">
-              <CardTitle className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+              <CardTitle className="text-2xl md:text-3xl font-extrabold tracking-tight text-card-foreground">
                 Enter the VR Interview Room
               </CardTitle>
-              <CardDescription className="text-base text-slate-500">
+              <CardDescription className="text-base text-muted-foreground">
                 Configure your simulation parameters. The AI will adapt
                 dynamically to your answers.
               </CardDescription>
@@ -489,19 +489,19 @@ export default function DashboardPage() {
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-4">
                 <Badge
                   variant="default"
-                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white"
+                  className="flex items-center gap-1.5 px-3 py-1 bg-foreground hover:bg-foreground/90 text-background"
                 >
                   <UserIcon className="w-3 h-3" /> Interview Profile Ready
                 </Badge>
                 <Badge
                   variant="secondary"
-                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium"
+                  className="flex items-center gap-1.5 px-3 py-1 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium"
                 >
-                  <Brain className="w-3 h-3 text-orange-500" /> Tech: {userRole}
+                  <Brain className="w-3 h-3 text-primary" /> Tech: {userRole}
                 </Badge>
                 <Badge
                   variant="outline"
-                  className={`flex items-center gap-1.5 px-3 py-1 font-medium ${hasResume ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"}`}
+                  className={`flex items-center gap-1.5 px-3 py-1 font-medium ${hasResume ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-destructive/10 text-destructive border-destructive/20"}`}
                 >
                   <FileText className="w-3 h-3" /> Resume:{" "}
                   {hasResume ? "Attached" : "Missing"}
@@ -512,7 +512,7 @@ export default function DashboardPage() {
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="space-y-2 relative md:col-span-2 lg:col-span-2">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Topics
                   </label>
 
@@ -522,22 +522,22 @@ export default function DashboardPage() {
                     onOpenChange={setIsTopicDropdownOpen}
                   >
                     <DropdownMenuTrigger asChild>
-                      <div className="w-full min-h-[42px] bg-white border border-slate-300 shadow-sm rounded-lg px-2 py-2 text-sm focus-within:border-orange-500 focus-within:ring-1 focus-within:ring-orange-500 transition-all cursor-pointer flex flex-wrap gap-2 items-center relative">
+                      <div className="w-full min-h-[42px] bg-background border border-input shadow-sm rounded-lg px-2 py-2 text-sm focus-within:border-ring focus-within:ring-1 focus-within:ring-ring transition-all cursor-pointer flex flex-wrap gap-2 items-center relative">
                         <div className="flex flex-wrap gap-2 flex-grow">
                           {selectedTopics.length === 0 && (
-                            <span className="text-slate-400 py-0.5 pointer-events-none">
+                            <span className="text-muted-foreground py-0.5 pointer-events-none">
                               Select technologies or topics...
                             </span>
                           )}
                           {selectedTopics.map((t) => (
                             <div
                               key={t}
-                              className="flex items-center gap-1 bg-orange-100 text-orange-800 font-medium px-2.5 py-1 rounded-md text-xs border border-orange-200 group"
+                              className="flex items-center gap-1 bg-primary/20 text-primary font-medium px-2.5 py-1 rounded-md text-xs border border-primary/30 group"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <span>{t}</span>
                               <button
-                                className="hover:text-amber-900 transition-colors focus:outline-none"
+                                className="hover:text-primary/80 transition-colors focus:outline-none"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedTopics((prev) =>
@@ -550,7 +550,7 @@ export default function DashboardPage() {
                             </div>
                           ))}
                         </div>
-                        <div className="text-slate-400 p-1">
+                        <div className="text-muted-foreground p-1">
                           <ChevronDown
                             className={`w-4 h-4 transition-transform ${isTopicDropdownOpen ? "rotate-180" : ""}`}
                           />
@@ -559,7 +559,7 @@ export default function DashboardPage() {
                     </DropdownMenuTrigger>
 
                     <DropdownMenuContent
-                      className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 bg-white border-slate-200"
+                      className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 bg-popover border-border"
                       align="start"
                       sideOffset={8}
                     >
@@ -588,11 +588,11 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Difficulty
                   </label>
                   <Select value={difficulty} onValueChange={setDifficulty}>
-                    <SelectTrigger className="w-full bg-white border border-slate-300 shadow-sm text-slate-900 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all">
+                    <SelectTrigger className="w-full bg-background border border-input shadow-sm text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring transition-all">
                       <SelectValue placeholder="Select difficulty" />
                     </SelectTrigger>
                     <SelectContent>
@@ -610,11 +610,11 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Duration
                   </label>
                   <Select value={duration} onValueChange={setDuration}>
-                    <SelectTrigger className="w-full bg-white border border-slate-300 shadow-sm text-slate-900 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all">
+                    <SelectTrigger className="w-full bg-background border border-input shadow-sm text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring transition-all">
                       <SelectValue placeholder="Select duration" />
                     </SelectTrigger>
                     <SelectContent>
@@ -628,11 +628,11 @@ export default function DashboardPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Interviewer Tone
                   </label>
                   <Select value={tone} onValueChange={setTone}>
-                    <SelectTrigger className="w-full bg-white border border-slate-300 shadow-sm text-slate-900 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all">
+                    <SelectTrigger className="w-full bg-background border border-input shadow-sm text-foreground rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-ring focus:ring-1 focus:ring-ring transition-all">
                       <SelectValue placeholder="Select tone" />
                     </SelectTrigger>
                     <SelectContent>
@@ -650,7 +650,7 @@ export default function DashboardPage() {
                   onClick={startSimulation}
                   onMouseMove={handleMouseMove}
                   disabled={isStarting}
-                  className="group relative overflow-hidden w-full md:w-2/3 h-16 text-lg font-bold rounded-full bg-linear-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white transition-all duration-300 shadow-[0_8px_20px_rgba(249,115,22,0.3)] hover:shadow-[0_12px_25px_rgba(249,115,22,0.4)] disabled:opacity-70 disabled:cursor-not-allowed border-none"
+                  className="group relative overflow-hidden w-full md:w-2/3 h-16 text-lg font-bold rounded-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-300 shadow-[0_8px_20px_rgba(249,115,22,0.3)] hover:shadow-[0_12px_25px_rgba(249,115,22,0.4)] disabled:opacity-70 disabled:cursor-not-allowed border-none"
                 >
                   <div className="relative z-10 flex items-center justify-center gap-3">
                     {isStarting ? (
@@ -667,12 +667,12 @@ export default function DashboardPage() {
                   </div>
                 </Button>
 
-                <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-slate-600 bg-white/50 px-6 py-3 rounded-full border border-slate-200 shadow-sm">
+                <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-muted-foreground bg-background/50 px-6 py-3 rounded-full border border-border shadow-sm">
                   <div className="flex items-center gap-2">
                     <div
-                      className={`w-2 h-2 rounded-full ${micStatus === "ready" ? "bg-emerald-500 animate-pulse" : micStatus === "testing" ? "bg-yellow-500 animate-pulse" : "bg-red-500"}`}
+                      className={`w-2 h-2 rounded-full ${micStatus === "ready" ? "bg-emerald-500 animate-pulse" : micStatus === "testing" ? "bg-yellow-500 animate-pulse" : "bg-destructive"}`}
                     />
-                    <Mic className="w-4 h-4 text-slate-400" />
+                    <Mic className="w-4 h-4 text-muted-foreground" />
                     <span>
                       {micStatus === "ready"
                         ? "Microphone Ready"
@@ -681,12 +681,12 @@ export default function DashboardPage() {
                           : "Mic Denied"}
                     </span>
                   </div>
-                  <div className="w-1 h-1 rounded-full bg-slate-300 hidden sm:block" />
+                  <div className="w-1 h-1 rounded-full bg-border hidden sm:block" />
                   <div className="flex items-center gap-2">
                     <div
-                      className={`w-2 h-2 rounded-full ${camStatus === "ready" ? "bg-emerald-500 animate-pulse" : camStatus === "testing" ? "bg-yellow-500 animate-pulse" : "bg-red-500"}`}
+                      className={`w-2 h-2 rounded-full ${camStatus === "ready" ? "bg-emerald-500 animate-pulse" : camStatus === "testing" ? "bg-yellow-500 animate-pulse" : "bg-destructive"}`}
                     />
-                    <Video className="w-4 h-4 text-slate-400" />
+                    <Video className="w-4 h-4 text-muted-foreground" />
                     <span>
                       {camStatus === "ready"
                         ? "Camera Ready"
@@ -695,12 +695,12 @@ export default function DashboardPage() {
                           : "Cam Denied"}
                     </span>
                   </div>
-                  <div className="w-1 h-1 rounded-full bg-slate-300 hidden sm:block" />
+                  <div className="w-1 h-1 rounded-full bg-border hidden sm:block" />
                   <div className="flex items-center gap-2">
                     <div
                       className={`w-2 h-2 rounded-full ${latency ? "bg-emerald-500 animate-pulse" : "bg-yellow-500 animate-pulse"}`}
                     />
-                    <Wifi className="w-4 h-4 text-slate-400" />
+                    <Wifi className="w-4 h-4 text-muted-foreground" />
                     <span>
                       {latency ? `${latency}ms Latency` : "Testing Ping..."}
                     </span>
@@ -713,93 +713,93 @@ export default function DashboardPage() {
 
         {/* Analytics Bento Grid */}
         <div>
-          <h3 className="text-lg font-bold mb-4 tracking-tight text-slate-900">
+          <h3 className="text-lg font-bold mb-4 tracking-tight text-foreground">
             Your Performance Analytics
           </h3>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Left: 2x2 Stat Cards */}
             <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Card className="bg-white/80 border-slate-200 shadow-md backdrop-blur-md relative overflow-hidden">
+              <Card className="bg-card/80 border-border shadow-md backdrop-blur-md relative overflow-hidden">
                 {loading && (
-                  <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center">
+                    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 )}
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold text-slate-500 uppercase flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-muted-foreground uppercase flex items-center justify-between">
                     Avg. Interview Score
-                    <Brain className="w-4 h-4 text-orange-500" />
+                    <Brain className="w-4 h-4 text-primary" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-black text-slate-900">
+                  <div className="text-3xl font-black text-foreground">
                     {stats.confidenceScore}%
                   </div>
                   <Progress
                     value={stats.confidenceScore}
-                    className="mt-3 h-1.5 bg-slate-200 [&>div]:bg-orange-500"
+                    className="mt-3 h-1.5 bg-muted [&>div]:bg-primary"
                   />
-                  <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
+                  <p className="text-[10px] text-muted-foreground mt-3 font-medium leading-tight">
                     Based on recent performance scores.
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="bg-white/80 border-slate-200 shadow-md backdrop-blur-md relative overflow-hidden">
+              <Card className="bg-card/80 border-border shadow-md backdrop-blur-md relative overflow-hidden">
                 {loading && (
-                  <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center">
                     <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 )}
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold text-slate-500 uppercase flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-muted-foreground uppercase flex items-center justify-between">
                     Focus / Gaze Score
                     <Eye className="w-4 h-4 text-amber-500" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-black text-slate-900">
+                  <div className="text-3xl font-black text-foreground">
                     {stats.gazeScore}%
                   </div>
                   <Progress
                     value={stats.gazeScore}
-                    className="mt-3 h-1.5 bg-slate-200 [&>div]:bg-amber-500"
+                    className="mt-3 h-1.5 bg-muted [&>div]:bg-amber-500"
                   />
-                  <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
+                  <p className="text-[10px] text-muted-foreground mt-3 font-medium leading-tight">
                     Eye contact and attention tracking.
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="bg-white/80 border-slate-200 shadow-md backdrop-blur-md relative overflow-hidden">
+              <Card className="bg-card/80 border-border shadow-md backdrop-blur-md relative overflow-hidden">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold text-slate-500 uppercase flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-muted-foreground uppercase flex items-center justify-between">
                     Resume Status
-                    <FileText className="w-4 h-4 text-orange-500" />
+                    <FileText className="w-4 h-4 text-primary" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {loading ? (
-                    <div className="text-2xl font-black text-slate-300">
+                    <div className="text-2xl font-black text-muted">
                       ...
                     </div>
                   ) : hasResume ? (
                     <>
-                      <div className="text-2xl font-black text-emerald-600">
+                      <div className="text-2xl font-black text-emerald-500">
                         Parsed & Ready
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-3 font-medium leading-tight">
+                      <p className="text-[10px] text-muted-foreground mt-3 font-medium leading-tight">
                         AI will tailor questions based on your background.
                       </p>
                     </>
                   ) : (
                     <>
-                      <div className="text-2xl font-black text-red-500">
+                      <div className="text-2xl font-black text-destructive">
                         Not Uploaded
                       </div>
                       <button
                         onClick={() => router.push("/profile")}
-                        className="text-xs font-bold text-orange-500 mt-3 hover:text-orange-600 transition-colors"
+                        className="text-xs font-bold text-primary mt-3 hover:text-primary/80 transition-colors"
                       >
                         Upload Resume →
                       </button>
@@ -808,23 +808,23 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-white/80 border-slate-200 shadow-md backdrop-blur-md relative overflow-hidden">
+              <Card className="bg-card/80 border-border shadow-md backdrop-blur-md relative overflow-hidden">
                 {loading && (
-                  <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 bg-background/50 backdrop-blur-sm z-10 flex items-center justify-center">
+                    <div className="w-5 h-5 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin"></div>
                   </div>
                 )}
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold text-slate-500 uppercase flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-muted-foreground uppercase flex items-center justify-between">
                     Mocks Completed
-                    <History className="w-4 h-4 text-slate-600" />
+                    <History className="w-4 h-4 text-muted-foreground" />
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-black text-slate-900">
+                  <div className="text-3xl font-black text-foreground">
                     {stats.totalMocks}
                   </div>
-                  <p className="text-xs text-slate-400 mt-3 font-medium">
+                  <p className="text-xs text-muted-foreground mt-3 font-medium">
                     Total successful interviews completed.
                   </p>
                 </CardContent>
@@ -832,16 +832,16 @@ export default function DashboardPage() {
             </div>
 
             {/* Right: Streak Calendar */}
-            <Card className="bg-white/80 border-slate-200 shadow-xl backdrop-blur-xl rounded-[2rem] relative overflow-hidden flex flex-col">
+            <Card className="bg-card/80 border-border shadow-xl backdrop-blur-xl rounded-[2rem] relative overflow-hidden flex flex-col">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-bold text-slate-500 uppercase flex items-center justify-between">
+                <CardTitle className="text-sm font-bold text-muted-foreground uppercase flex items-center justify-between">
                   Interview Streak
-                  <Flame className="w-4 h-4 text-orange-500" />
+                  <Flame className="w-4 h-4 text-primary" />
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="text-3xl font-black text-slate-900 flex items-center gap-2">
+                  <span className="text-3xl font-black text-foreground flex items-center gap-2">
                     🔥 {stats.streak} Days
                   </span>
                 </div>
@@ -849,7 +849,7 @@ export default function DashboardPage() {
                 {/* Calendar Grid */}
                 <StreakCalendar recentInterviews={recentInterviews} />
 
-                <p className="text-xs text-slate-400 font-medium mt-auto pt-3">
+                <p className="text-xs text-muted-foreground font-medium mt-auto pt-3">
                   Practice daily to build your streak!
                 </p>
               </CardContent>
@@ -859,21 +859,21 @@ export default function DashboardPage() {
 
         {/* Recent Interviews List */}
         <div>
-          <h3 className="text-lg font-bold mb-4 tracking-tight text-slate-900">
+          <h3 className="text-lg font-bold mb-4 tracking-tight text-foreground">
             Recent Sessions
           </h3>
-          <Card className="bg-white/80 border-slate-200 shadow-md backdrop-blur-md overflow-hidden relative min-h-[150px] rounded-xl">
+          <Card className="bg-card/80 border-border shadow-md backdrop-blur-md overflow-hidden relative min-h-[150px] rounded-xl">
             {loading && (
-              <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
-                <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm font-medium text-slate-500">
+              <div className="absolute inset-0 bg-background/60 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-sm font-medium text-muted-foreground">
                   Loading history...
                 </span>
               </div>
             )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-500 uppercase bg-slate-50/80 border-b border-slate-200">
+                <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b border-border">
                   <tr>
                     <th className="px-6 py-4 font-bold">Date</th>
                     <th className="px-6 py-4 font-bold">Type</th>
@@ -887,18 +887,18 @@ export default function DashboardPage() {
                     recentInterviews.map((interview) => (
                       <tr
                         key={interview.id}
-                        className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors"
+                        className="border-b border-border/50 last:border-0 hover:bg-muted/50 transition-colors"
                       >
-                        <td className="px-6 py-4 text-slate-600 font-medium whitespace-nowrap">
+                        <td className="px-6 py-4 text-muted-foreground font-medium whitespace-nowrap">
                           {interview.date}
                         </td>
-                        <td className="px-6 py-4 text-slate-900 font-medium">
+                        <td className="px-6 py-4 text-foreground font-medium">
                           {interview.type}
                         </td>
                         <td className="px-6 py-4">
                           <Badge
                             variant="outline"
-                            className="border-slate-200 bg-white text-slate-600 font-semibold"
+                            className="border-border bg-background text-muted-foreground font-semibold"
                           >
                             {interview.persona}
                           </Badge>
@@ -909,7 +909,7 @@ export default function DashboardPage() {
                               className={
                                 interview.rawScore > 85
                                   ? "text-emerald-500"
-                                  : "text-orange-500"
+                                  : "text-primary"
                               }
                             >
                               {interview.score}
@@ -917,7 +917,7 @@ export default function DashboardPage() {
                           ) : (
                             <Badge
                               variant="outline"
-                              className="text-amber-600 bg-amber-50 border-amber-200 font-semibold"
+                              className="text-amber-500 bg-amber-500/10 border-amber-500/20 font-semibold"
                             >
                               Incomplete
                             </Badge>
@@ -929,7 +929,7 @@ export default function DashboardPage() {
                             <Button
                               variant="default"
                               size="sm"
-                              className="h-8 shadow-[0_4px_10px_rgba(249,115,22,0.2)] bg-linear-to-r from-orange-400 to-orange-500 text-white hover:from-orange-500 hover:to-orange-600 rounded-full font-bold px-4"
+                              className="h-8 shadow-[0_4px_10px_rgba(249,115,22,0.2)] bg-primary hover:bg-primary/90 text-primary-foreground rounded-full font-bold px-4"
                               onClick={() =>
                                 router.push(`/report/${interview.reportId}`)
                               }
@@ -940,7 +940,7 @@ export default function DashboardPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-8 shadow-sm border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-full font-bold px-4 transition-colors"
+                              className="h-8 shadow-sm border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted rounded-full font-bold px-4 transition-colors"
                               onClick={() =>
                                 router.push(`/interview/${interview.id}`)
                               }
@@ -955,11 +955,11 @@ export default function DashboardPage() {
                     <tr>
                       <td colSpan={5} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center gap-2">
-                          <History className="w-8 h-8 text-slate-300" />
-                          <p className="text-slate-600 font-bold">
+                          <History className="w-8 h-8 text-muted-foreground/50" />
+                          <p className="text-muted-foreground font-bold">
                             No interviews completed yet.
                           </p>
-                          <p className="text-slate-400 text-xs font-medium text-balance max-w-sm mt-1">
+                          <p className="text-muted-foreground/70 text-xs font-medium text-balance max-w-sm mt-1">
                             When you complete your first mock interview, your
                             details and report will show up here.
                           </p>

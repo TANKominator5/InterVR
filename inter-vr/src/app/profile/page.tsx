@@ -18,13 +18,13 @@ export default async function ProfilePage() {
     .single();
 
   return (
-    <div className="flex-1 min-h-screen py-10 px-4 md:px-8 lg:px-12 bg-[linear-gradient(to_bottom_right,var(--color-blue-500),var(--color-blue-300),var(--color-orange-300),var(--color-orange-500))]">
+    <div className="flex-1 min-h-screen py-10 px-4 md:px-8 lg:px-12 bg-background">
       <div className="max-w-7xl mx-auto">
-        <header className="mb-8 text-white">
+        <header className="mb-8 text-foreground">
           <h1 className="text-4xl font-black tracking-tight">
             Profile Settings
           </h1>
-          <p className="opacity-90 font-medium">
+          <p className="opacity-90 font-medium text-muted-foreground">
             Customize your experience and track your progress.
           </p>
         </header>

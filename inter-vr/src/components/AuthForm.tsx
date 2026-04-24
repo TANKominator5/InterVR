@@ -90,19 +90,19 @@ export function AuthForm({ defaultMode = "login" }: { defaultMode?: "login" | "s
     };
 
     return (
-        <div className="w-full max-w-md bg-white/70 border border-slate-200 rounded-3xl p-8 shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
+        <div className="w-full max-w-md bg-background/70 border border-border rounded-3xl p-8 shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-chart-1/10 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none" />
 
             <div className="relative z-10 flex flex-col items-center mb-8">
                 <Link href="/" className="flex items-center gap-2 mb-6 group">
-                    <Hexagon className="w-8 h-8 text-orange-500 group-hover:scale-110 transition-transform" />
-                    <span className="text-2xl font-bold tracking-tight text-slate-900">Inter<span className="text-orange-500">VR</span></span>
+                    <Hexagon className="w-8 h-8 text-primary group-hover:scale-110 transition-transform" />
+                    <span className="text-2xl font-bold tracking-tight text-foreground">Inter<span className="text-primary">VR</span></span>
                 </Link>
-                <h2 className="text-2xl font-bold text-slate-900">
+                <h2 className="text-2xl font-bold text-foreground">
                     {mode === "login" ? "Welcome Back" : "Create your account"}
                 </h2>
-                <p className="text-sm text-slate-600 mt-2">
+                <p className="text-sm text-muted-foreground mt-2">
                     {mode === "login" ? "Enter your details to sign in" : "Start your prep journey today"}
                 </p>
             </div>
@@ -110,7 +110,7 @@ export function AuthForm({ defaultMode = "login" }: { defaultMode?: "login" | "s
             <div className="relative z-10">
                 <button
                     onClick={handleGoogleLogin}
-                    className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-white focus:ring-orange-500 mb-6"
+                    className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-background border border-border text-foreground font-semibold rounded-xl hover:bg-muted transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary mb-6"
                 >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path
@@ -134,47 +134,47 @@ export function AuthForm({ defaultMode = "login" }: { defaultMode?: "login" | "s
                 </button>
 
                 <div className="flex items-center gap-4 mb-6">
-                    <div className="h-px bg-slate-200 flex-1" />
-                    <span className="text-sm font-medium text-slate-500 uppercase">Or</span>
-                    <div className="h-px bg-slate-200 flex-1" />
+                    <div className="h-px bg-border flex-1" />
+                    <span className="text-sm font-medium text-muted-foreground uppercase">Or</span>
+                    <div className="h-px bg-border flex-1" />
                 </div>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                        <label className="block text-sm font-medium text-foreground mb-1">Email</label>
                         <input
                             {...register("email")}
-                            className={`w-full bg-white border ${errors.email ? 'border-red-500' : 'border-slate-300'} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all`}
+                            className={`w-full bg-background border ${errors.email ? 'border-destructive' : 'border-input'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all`}
                             placeholder="you@example.com"
                         />
-                        {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
+                        {errors.email && <p className="text-destructive text-sm mt-1">{errors.email.message}</p>}
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                        <label className="block text-sm font-medium text-foreground mb-1">Password</label>
                         <input
                             type="password"
                             {...register("password")}
-                            className={`w-full bg-white border ${errors.password ? 'border-red-500' : 'border-slate-300'} rounded-xl px-4 py-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all`}
+                            className={`w-full bg-background border ${errors.password ? 'border-destructive' : 'border-input'} rounded-xl px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all`}
                             placeholder="••••••••"
                         />
-                        {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>}
+                        {errors.password && <p className="text-destructive text-sm mt-1">{errors.password.message}</p>}
                     </div>
 
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-linear-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-orange-500/30 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl transition-all shadow-md hover:shadow-primary/30 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background disabled:opacity-70 disabled:cursor-not-allowed mt-2"
                     >
                         {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (mode === "login" ? "Sign In" : "Create Account")}
                     </button>
                 </form>
 
-                <div className="mt-6 text-center text-sm text-slate-600">
+                <div className="mt-6 text-center text-sm text-muted-foreground">
                     {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
                     <button
                         onClick={() => setMode(mode === "login" ? "signup" : "login")}
-                        className="text-orange-500 font-semibold hover:text-orange-600 transition-colors"
+                        className="text-primary font-semibold hover:text-primary/80 transition-colors"
                     >
                         {mode === "login" ? "Sign up" : "Sign in"}
                     </button>

@@ -18,7 +18,7 @@ export async function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/60 backdrop-blur-md border-b border-gray-200/50 shadow-sm">
+    <header className="sticky top-0 z-50 w-full bg-background/60 backdrop-blur-md border-b border-border shadow-sm">
       <div className="flex w-full h-16 items-center justify-between px-4 lg:px-8">
         <Link href="/" className="flex items-center gap-2 group">
           <div className="relative flex items-center justify-center h-8 w-8 rounded-lg bg-primary/20 text-primary group-hover:bg-primary/30 transition-colors">

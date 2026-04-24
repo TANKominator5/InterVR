@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ModeToggle } from "./ModeToggle";
 
 interface NavLinksProps {
   user: any;
@@ -13,6 +14,7 @@ export function NavLinks({ user, signOutAction }: NavLinksProps) {
 
   return (
     <div className="flex items-center gap-4">
+      <ModeToggle />
       {user ? (
         <>
           {pathname !== "/dashboard" && (
@@ -53,7 +55,7 @@ export function NavLinks({ user, signOutAction }: NavLinksProps) {
           {pathname !== "/signup" && (
             <Link
               href="/signup"
-              className="hidden sm:inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 bg-primary text-white shadow hover:bg-primary/90 h-9 px-4 py-2"
+              className="hidden sm:inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2"
             >
               Get Started
             </Link>

@@ -14,6 +14,7 @@ import {
     Lightbulb,
     Loader2,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ export default function CodeSandbox({
     const [language, setLanguage] = useState(initialLanguage);
     const [code, setCode] = useState(STARTER_CODE[initialLanguage] || STARTER_CODE.javascript);
     const [showHint, setShowHint] = useState(false);
+    const { theme } = useTheme();
 
     const stats = useMemo(() => {
         const lines = code.split("\n").length;
@@ -125,13 +127,13 @@ export default function CodeSandbox({
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <span className="text-xs text-foreground0 font-mono hidden sm:block">
+                    <span className="text-xs text-muted-foreground font-mono hidden sm:block">
                         {stats.lines} lines · {stats.chars} chars
                     </span>
                     <button
                         onClick={() => onCodeSubmit(code, language)}
                         disabled={isAnalyzing || code.trim().length < 10}
-                        className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold text-white bg-[linear-gradient(to_right,var(--color-orange-400),var(--color-orange-600))] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_12px_rgba(249,115,22,0.3)]"
+                        className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-bold text-primary-foreground bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_12px_rgba(249,115,22,0.3)]"
                     >
                         {isAnalyzing ? (
                             <>
@@ -152,7 +154,7 @@ export default function CodeSandbox({
             <PanelGroup orientation="vertical" className="flex-1 min-h-0">
                 <Panel defaultSize="60%" minSize="30%">
                     <Editor
-                        theme="light"
+                        theme={theme === "dark" ? "vs-dark" : "light"}
                         language={getMonacoLang(language)}
                         value={code}
                         onChange={(val) => setCode(val || "")}
@@ -173,7 +175,7 @@ export default function CodeSandbox({
                 </Panel>
 
                 {analysisResult && (
-                    <PanelResizeHandle className="h-1.5 bg-slate-200 hover:bg-orange-400/50 transition-colors cursor-row-resize shrink-0" />
+                    <PanelResizeHandle className="h-1.5 bg-border hover:bg-primary/50 transition-colors cursor-row-resize shrink-0" />
                 )}
 
                 {analysisResult && (
@@ -197,7 +199,7 @@ export default function CodeSandbox({
 
                             {/* ── Row 3: Overall Feedback ───────────────────────────── */}
                             <div className="bg-card border border-border rounded-xl p-4">
-                                <p className="text-xs text-foreground0 uppercase tracking-wider mb-2 font-semibold">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2 font-semibold">
                                     AI Analysis
                                 </p>
                                 <p className="text-sm text-muted-foreground leading-relaxed">
@@ -208,7 +210,7 @@ export default function CodeSandbox({
                             {/* ── Row 4: Line Feedback ──────────────────────────────── */}
                             {analysisResult.line_feedback.length > 0 && (
                                 <div className="space-y-2">
-                                    <p className="text-xs text-foreground0 uppercase tracking-wider font-semibold">
+                                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">
                                         Line-by-Line Notes
                                     </p>
                                     {analysisResult.line_feedback.map((lf, i) => (
@@ -239,7 +241,7 @@ export default function CodeSandbox({
                                     <p className="text-sm text-muted-foreground font-medium">
                                         {analysisResult.counter_question}
                                     </p>
-                                    <p className="text-xs text-foreground0 mt-2 font-semibold text-orange-700">
+                                    <p className="text-xs text-muted-foreground mt-2 font-semibold text-orange-700">
                                         Answer this question verbally — the interviewer is listening.
                                     </p>
                                 </div>
@@ -313,8 +315,8 @@ function VerdictBanner({ verdict }: { verdict: "pass" | "partial" | "fail" }) {
 function ScoreCard({ label, value }: { label: string; value: string }) {
     return (
         <div className="bg-muted border border-border rounded-xl p-3 text-center">
-            <div className="text-base font-bold text-white">{value}</div>
-            <div className="text-xs text-foreground0 mt-0.5">{label}</div>
+            <div className="text-base font-bold text-foreground">{value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
         </div>
     );
 }
