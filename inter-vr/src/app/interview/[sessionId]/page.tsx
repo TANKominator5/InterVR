@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
+import InterviewerPanel from "@/components/interviewer/InterviewerPanel";
+import { useInterviewerSpeech, createSpeechFrame, type InterviewerMood } from "@/hooks/useInterviewerSpeech";
 import {
   Mic,
   MicOff,
   Square,
-  Volume2,
   ChevronRight,
   Loader2,
   CheckCircle2,
@@ -110,6 +111,20 @@ export default function InterviewRoomPage() {
   const antiCheatVideoRef = useRef<HTMLVideoElement>(null);
   const lastFlushedEventIndexRef = useRef(0);
 
+  // ── 3D Interviewer (free, browser-only) ───────────────────────────────────
+  // Shared mutable speech frame: HeadTTS/browser TTS writes mouth poses here,
+  // the R3F avatar reads them every frame without React re-renders.
+  const interviewerFrameRef = useMemo(() => createSpeechFrame(), []);
+  const interviewerSpeech = useInterviewerSpeech(interviewerFrameRef);
+  const interviewerMood: InterviewerMood =
+    phase === "speaking" || phase === "followup"
+      ? "speaking"
+      : phase === "listening" || phase === "recording"
+        ? "listening"
+        : phase === "processing"
+          ? "thinking"
+          : "idle";
+
   // ── Video Anti-Cheat ───────────────────────────────────────────────────────
   const [webcamEnabled, setWebcamEnabled] = useState(false);
   const [webcamError, setWebcamError] = useState("");
@@ -187,6 +202,9 @@ export default function InterviewRoomPage() {
     ) return;
 
     // Instantly stop the AI interviewer's voice if they are currently speaking
+    try {
+      interviewerSpeech.cancel();
+    } catch { /* noop */ }
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       setAudioPlaying(false);
@@ -207,7 +225,7 @@ export default function InterviewRoomPage() {
 
       return newCount;
     });
-  }, [phase, router]);
+  }, [phase, router, interviewerSpeech]);
 
   // ── Handle Resume After Violation ─────────────────────────────────────────
   const handleResumeAfterViolation = useCallback(async () => {
@@ -561,41 +579,41 @@ export default function InterviewRoomPage() {
     };
   }, [phase, isInterviewTerminated, showViolationOverlay, isFullscreen, handleViolation]);
 
-  // ── TTS: Speak text (browser-native, instant) ───────────────────────────────
-  const speak = useCallback(async (text: string): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!("speechSynthesis" in window)) {
-        resolve(); // Fallback: skip TTS if not supported
-        return;
-      }
+  // ── TTS: free local viseme speech (HeadTTS) with browser fallback ─────────
+  // The interviewer avatar reads mouth poses from interviewerFrameRef while
+  // this promise is pending; it resolves when audio playback finishes.
+  const speak = useCallback(
+    async (text: string): Promise<void> => {
       setAudioPlaying(true);
-      window.speechSynthesis.cancel(); // Clear any pending speech
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.95;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-
-      // Prefer a natural English voice
-      const voices = window.speechSynthesis.getVoices();
-      const preferred =
-        voices.find(
-          (v) => v.name.includes("Google") && v.lang.startsWith("en"),
-        ) || voices.find((v) => v.lang.startsWith("en"));
-      if (preferred) utterance.voice = preferred;
-
-      utterance.onend = () => {
+      try {
+        await interviewerSpeech.speak(text);
+      } finally {
         setAudioPlaying(false);
-        resolve();
-      };
-      utterance.onerror = () => {
-        setAudioPlaying(false);
-        resolve();
-      };
+      }
+    },
+    [interviewerSpeech],
+  );
 
-      window.speechSynthesis.speak(utterance);
-    });
-  }, []);
+  // Warm up the free local voice while the user is on the "ready" screen so
+  // the first question starts fast. Falls back silently to browser TTS.
+  useEffect(() => {
+    if (phase === "ready") {
+      window.speechSynthesis?.getVoices();
+      void interviewerSpeech.preload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  // Stop interviewer speech if the user leaves mid-question.
+  useEffect(() => {
+    if (phase === "completed" || phase === "error") {
+      try {
+        interviewerSpeech.cancel();
+      } catch { /* noop */ }
+      setAudioPlaying(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // ── Start Interview ────────────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
@@ -1117,6 +1135,15 @@ export default function InterviewRoomPage() {
           {/* LEFT PANEL — Question + voice controls */}
           <Panel defaultSize="40%" minSize="30%">
             <div className="h-full overflow-y-auto p-6 flex flex-col gap-6">
+              <InterviewerPanel
+                frameRef={interviewerFrameRef}
+                mood={interviewerMood}
+                phaseLabel={phase}
+                engine={interviewerSpeech.engine}
+                modelLoading={interviewerSpeech.loading}
+                modelProgress={interviewerSpeech.progress}
+                onPreloadVoice={() => void interviewerSpeech.preload()}
+              />
               {/* Browser Anti-Cheat Warning Banner */}
               {browserAntiCheat.showWarning && (
                 <div className="w-full flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
@@ -1181,20 +1208,6 @@ export default function InterviewRoomPage() {
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
-
-              {phase === "speaking" && (
-                <div className="flex flex-col items-center gap-4">
-                  <div className="flex items-center gap-2 px-5 py-3 bg-primary/10 border border-primary/30 rounded-full shadow-sm">
-                    <Volume2 className="w-5 h-5 text-primary animate-pulse" />
-                    <span className="text-primary text-sm font-semibold">AI Interviewer is speaking...</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} className="w-1 bg-primary rounded-full animate-bounce" style={{ height: `${8 + (i % 3) * 8}px`, animationDelay: `${i * 0.1}s` }} />
-                    ))}
-                  </div>
                 </div>
               )}
 
@@ -1299,7 +1312,7 @@ export default function InterviewRoomPage() {
         </PanelGroup>
       ) : (
         /* ── Single-column layout for non-coding / ready / etc ─────── */
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 max-w-3xl mx-auto w-full gap-8">
+        <div className="flex-1 flex flex-col items-center px-4 py-6 max-w-4xl mx-auto w-full gap-5">
           {phase === "ready" && (
             <div className="text-center space-y-6">
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto border border-primary/20 shadow-sm">
@@ -1337,6 +1350,15 @@ export default function InterviewRoomPage() {
             phase === "followup") &&
             currentQuestion && (
               <>
+                <InterviewerPanel
+                  frameRef={interviewerFrameRef}
+                  mood={interviewerMood}
+                  phaseLabel={phase}
+                  engine={interviewerSpeech.engine}
+                  modelLoading={interviewerSpeech.loading}
+                  modelProgress={interviewerSpeech.progress}
+                  onPreloadVoice={() => void interviewerSpeech.preload()}
+                />
                 {/* Browser Anti-Cheat Warning Banner */}
                 {browserAntiCheat.showWarning && (
                   <div className="w-full flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
@@ -1400,29 +1422,6 @@ export default function InterviewRoomPage() {
                         </li>
                       ))}
                     </ul>
-                  </div>
-                )}
-
-                {phase === "speaking" && (
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="flex items-center gap-2 px-5 py-3 bg-primary/10 border border-primary/30 rounded-full shadow-sm">
-                      <Volume2 className="w-5 h-5 text-primary animate-pulse" />
-                      <span className="text-primary text-sm font-semibold">
-                        AI Interviewer is speaking...
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((i) => (
-                        <div
-                          key={i}
-                          className="w-1 bg-primary rounded-full animate-bounce"
-                          style={{
-                            height: `${8 + (i % 3) * 8}px`,
-                            animationDelay: `${i * 0.1}s`,
-                          }}
-                        />
-                      ))}
-                    </div>
                   </div>
                 )}
 
