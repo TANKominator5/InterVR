@@ -21,6 +21,7 @@ export interface SpeechFrame {
   level: number; // 0..1 audio amplitude (fallback jaw drive)
   engine: SpeechEngine;
   visemeWeights: Record<string, number>;
+  hasVisemeTimeline: boolean;
 }
 
 // Shared mutable frame read by the R3F useFrame loop (no React re-render per frame).
@@ -33,6 +34,7 @@ export function createSpeechFrame(): { current: SpeechFrame } {
       level: 0,
       engine: "uninitialized",
       visemeWeights: {},
+      hasVisemeTimeline: false,
     },
   };
 }
@@ -107,9 +109,13 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
     frameRef.current.speaking = false;
     frameRef.current.mouth = NEUTRAL_MOUTH;
     frameRef.current.visemeWeights = {};
+    frameRef.current.hasVisemeTimeline = false;
     frameRef.current.level = 0;
     stopFrameLoop();
     try { sourceRef.current?.stop(); } catch { /* already stopped */ }
+    sourceRef.current?.disconnect();
+    analyserRef.current?.disconnect();
+    analyserRef.current = null;
     sourceRef.current = null;
     const r = resolveRef.current;
     resolveRef.current = null;
@@ -224,12 +230,15 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
       const cues: TimedViseme[] = (d.visemes ?? []).map((v, i) => ({
         viseme: normalizeViseme(v),
         startMs: d.vtimes?.[i] ?? 0,
-        durationMs: Math.max(40, d.vdurations?.[i] ?? 80),
+        durationMs: Math.max(1, d.vdurations?.[i] ?? 80),
       }));
-      cuesRef.current = cues;
+      cuesRef.current = cues.length ? cues : wordsToTimedVisemes((d.words ?? []).map((word, i) => ({
+        word, startMs: d.wtimes?.[i] ?? 0, durationMs: d.wdurations?.[i] ?? 250,
+      })));
+      frameRef.current.hasVisemeTimeline = cuesRef.current.length > 0;
 
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
+      analyser.fftSize = 1024;
       analyserRef.current = analyser;
 
       const src = ctx.createBufferSource();
@@ -238,7 +247,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
       analyser.connect(ctx.destination);
       sourceRef.current = src;
 
-      const levelBuf = new Uint8Array(analyser.frequencyBinCount);
+      const levelBuf = new Float32Array(analyser.fftSize);
 
       return new Promise<void>((resolve) => {
         resolveRef.current = resolve;
@@ -255,10 +264,12 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
           frameRef.current.mouth = sampleVisemes(cuesRef.current, t);
           frameRef.current.visemeWeights = sampleVisemeWeights(cuesRef.current, t);
           try {
-            analyser.getByteFrequencyData(levelBuf);
+            // RMS follows syllable energy directly rather than averaging it
+            // across mostly empty frequency bins.
+            analyser.getFloatTimeDomainData(levelBuf);
             let sum = 0;
-            for (let i = 0; i < levelBuf.length; i++) sum += levelBuf[i];
-            frameRef.current.level = Math.min(1, sum / levelBuf.length / 90);
+            for (let i = 0; i < levelBuf.length; i++) sum += levelBuf[i] * levelBuf[i];
+            frameRef.current.level = Math.min(1, Math.sqrt(sum / levelBuf.length) * 5);
           } catch { frameRef.current.level = 0; }
 
           if (t >= buffer.duration * 1000 + 120) {
@@ -269,7 +280,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
         };
         src.onended = () => {
           // Let the trailing viseme settle briefly before resolving.
-          setTimeout(() => { if (speakingRef.current) finishSpeak(); }, 120);
+          setTimeout(() => { if (sourceRef.current === src && speakingRef.current) finishSpeak(); }, 120);
         };
         src.start();
         tick();
@@ -297,31 +308,34 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
         if (preferred) utt.voice = preferred;
 
         // Word-boundary fallback: build heuristic visemes as words arrive.
-        const words = text.split(/\s+/).filter(Boolean);
-        const estPerWord = Math.max(180, Math.min(420, (text.length / Math.max(1, words.length)) * 55));
-        let wordIdx = 0;
-        const start = performance.now();
-        const approxCues: TimedViseme[] = wordsToTimedVisemes(
-          words.map((w, i) => ({ word: w, startMs: i * estPerWord, durationMs: estPerWord }))
-        );
-        cuesRef.current = approxCues;
-        speakingRef.current = true;
-        frameRef.current.speaking = true;
+        const wordMatches = [...text.matchAll(/\S+/g)];
+        const words = wordMatches.map((match) => match[0]);
+        let start = 0;
+        let lastBoundary = -1;
+        let cursor = 0;
+        const timedWords = words.map((word) => {
+          const syllables = Math.max(1, word.match(/[aeiouy]+/gi)?.length ?? 1);
+          const pause = /[.!?]$/.test(word) ? 240 : /[,;:]$/.test(word) ? 120 : 0;
+          const durationMs = (150 + syllables * 110) / utt.rate + pause;
+          const timing = { word, startMs: cursor, durationMs };
+          cursor += durationMs;
+          return timing;
+        });
+        cuesRef.current = wordsToTimedVisemes(timedWords);
+        frameRef.current.hasVisemeTimeline = true;
         resolveRef.current = resolve;
 
         utt.onboundary = (e: SpeechSynthesisEvent) => {
           // e.charIndex lets us advance the word cursor for tighter sync.
-          if (typeof e.charIndex === "number") {
-            const upto = text.slice(0, e.charIndex).split(/\s+/).filter(Boolean).length;
-            wordIdx = Math.min(words.length - 1, Math.max(0, upto));
+          if (start && (!e.name || e.name === "word") && typeof e.charIndex === "number") {
+            const wordIdx = Math.max(0, wordMatches.findIndex((match) => e.charIndex >= match.index && e.charIndex < match.index + match[0].length));
+            if (wordIdx <= lastBoundary) return;
+            lastBoundary = wordIdx;
             const elapsed = performance.now() - start;
-            // Re-anchor remaining cues to the real clock.
-            const remapped = approxCues.map((c, i) => {
-              if (i < wordIdx) return c;
-              if (i === wordIdx) return { ...c, startMs: elapsed, durationMs: Math.max(90, c.durationMs) };
-              return { ...c, startMs: elapsed + (i - wordIdx) * estPerWord, durationMs: estPerWord };
-            });
-            cuesRef.current = remapped;
+            // Rebuild sub-word cues, anchored to this actual spoken word.
+            cuesRef.current = wordsToTimedVisemes(timedWords.slice(wordIdx).map((word) => ({
+              ...word, startMs: elapsed + word.startMs - timedWords[wordIdx].startMs,
+            })));
           }
         };
 
@@ -331,16 +345,21 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
           frameRef.current.timeMs = t;
           frameRef.current.mouth = sampleVisemes(cuesRef.current, t);
           frameRef.current.visemeWeights = sampleVisemeWeights(cuesRef.current, t);
-          // No audio tap for speechSynthesis; use a gentle oscillation so the
-          // jaw never looks frozen if boundary events are missing (Chrome-only).
-          frameRef.current.level = 0.35 + 0.25 * Math.sin(t / 130);
+          // Use the changing phonetic pose as approximate syllable energy when
+          // the browser cannot expose its speech audio to an analyser.
+          frameRef.current.level = Math.min(1, frameRef.current.mouth.jawOpen * 1.3);
           rafRef.current = requestAnimationFrame(tick);
         };
 
         utt.onend = () => finishSpeak();
         utt.onerror = () => finishSpeak();
+        utt.onstart = () => {
+          start = performance.now();
+          speakingRef.current = true;
+          frameRef.current.speaking = true;
+          tick();
+        };
         window.speechSynthesis.speak(utt);
-        tick();
       });
     },
     [finishSpeak, frameRef]

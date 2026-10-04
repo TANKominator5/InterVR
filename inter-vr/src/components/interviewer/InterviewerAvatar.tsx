@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import type { SpeechFrame, InterviewerMood } from "@/hooks/useInterviewerSpeech";
 import { OCULUS_TO_ARKIT, type OculusViseme } from "@/lib/interviewer/viseme-map";
+import { buildSpeechPose } from "@/lib/interviewer/speech-animation";
 
 const MODEL_URL = "/models/interviewer.glb";
 
@@ -19,6 +20,7 @@ interface FaceMesh {
   influences: number[];
   channels: { name: string; index: number }[];
   hasVisemes: boolean;
+  visemes: Set<string>;
 }
 
 interface AnimatedBone {
@@ -49,6 +51,7 @@ function prepareCharacter(source: THREE.Group) {
         influences: object.morphTargetInfluences,
         channels: Object.entries(object.morphTargetDictionary).map(([name, index]) => ({ name, index })),
         hasVisemes: Object.keys(object.morphTargetDictionary).some((name) => name.startsWith("viseme_")),
+        visemes: new Set(Object.keys(object.morphTargetDictionary).filter((name) => name.startsWith("viseme_")).map((name) => name.slice(7))),
       });
       object.morphTargetInfluences.fill(0);
     }
@@ -93,6 +96,8 @@ function prepareCharacter(source: THREE.Group) {
   lowerArm("RightArm", "RightForeArm", new THREE.Vector3(-0.12, -1, 0.02));
   lowerArm("LeftForeArm", "LeftHand", new THREE.Vector3(0.05, -1, 0.1));
   lowerArm("RightForeArm", "RightHand", new THREE.Vector3(-0.05, -1, 0.1));
+  // Breathing and gestures must start from the relaxed pose, including arms.
+  Object.values(bones).forEach(({ bone, rest }) => rest.copy(bone.quaternion));
 
   const bounds = new THREE.Box3().setFromObject(model);
   const center = bounds.getCenter(new THREE.Vector3());
@@ -113,7 +118,13 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
   const { scene } = useGLTF(MODEL_URL);
   const character = useMemo(() => prepareCharacter(scene), [scene]);
   const { camera, size } = useThree();
-  const blink = useRef({ next: 2.8, elapsed: -1 });
+  const blink = useRef({ next: 2.8, elapsed: -1, duration: 0.17 });
+  const motion = useRef({
+    energy: 0, previousEnergy: 0, speaking: 0, listening: 0, thinking: 0,
+    gazeNext: 1.4, gazeX: 0, gazeY: 0, gazeTargetX: 0, gazeTargetY: 0,
+    postureNext: 2, pitch: 0, yaw: 0, roll: 0, targetPitch: 0, targetYaw: 0, targetRoll: 0,
+    gestureNext: 1.5, gestureTime: -1, gestureDuration: 0.7, gestureStrength: 0,
+  });
   const rotation = useMemo(() => new THREE.Quaternion(), []);
   const euler = useMemo(() => new THREE.Euler(), []);
 
@@ -140,53 +151,89 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
 
   useFrame(({ clock }, delta) => {
     const time = clock.elapsedTime;
+    const dt = Math.min(delta, 0.05);
     const frame = frameRef.current;
     const speechWeights = frame.speaking ? frame.visemeWeights : {};
-    const smoothing = 1 - Math.exp(-Math.min(delta, 0.05) * 35);
+    const state = motion.current;
+    const damp = (from: number, to: number, speed: number) => THREE.MathUtils.damp(from, to, speed, dt);
+    state.previousEnergy = state.energy;
+    state.energy = damp(state.energy, frame.speaking ? frame.level : 0, frame.level > state.energy ? 18 : 8);
+    state.speaking = damp(state.speaking, frame.speaking ? 1 : 0, 5);
+    state.listening = damp(state.listening, mood === "listening" ? 1 : 0, 3);
+    state.thinking = damp(state.thinking, mood === "thinking" ? 1 : 0, 3);
+    const { visemes, arkit, jawBoost } = buildSpeechPose(speechWeights, state.energy, frame.speaking, !frame.hasVisemeTimeline);
 
     const blinkState = blink.current;
-    blinkState.next -= delta;
+    blinkState.next -= dt;
     if (blinkState.next <= 0) {
       blinkState.elapsed = 0;
-      blinkState.next = 3 + Math.random() * 2.5;
+      blinkState.duration = 0.13 + Math.random() * 0.07;
+      blinkState.next = Math.random() < 0.12 ? 0.28 : 2.4 + Math.random() * 3.8;
     }
     let blinkWeight = 0;
     if (blinkState.elapsed >= 0) {
-      blinkState.elapsed += delta;
-      blinkWeight = Math.sin(Math.min(1, blinkState.elapsed / 0.16) * Math.PI);
-      if (blinkState.elapsed >= 0.16) blinkState.elapsed = -1;
+      blinkState.elapsed += dt;
+      const progress = Math.min(1, blinkState.elapsed / blinkState.duration);
+      // Quick lid closure, slower reopening instead of a metronomic blink.
+      blinkWeight = progress < 0.35 ? Math.sin(progress / 0.35 * Math.PI / 2) : Math.cos((progress - 0.35) / 0.65 * Math.PI / 2);
+      if (progress >= 1) blinkState.elapsed = -1;
     }
 
-    // ARKit-only models can still use the same timing; the bundled model uses
-    // its authored Oculus poses on the face, lower teeth and tongue directly.
-    const arkit: Record<string, number> = {};
-    for (const [viseme, weight] of Object.entries(speechWeights)) {
-      const mapping = OCULUS_TO_ARKIT[viseme as OculusViseme];
-      if (!mapping) continue;
-      for (const [key, value] of Object.entries(mapping)) {
-        arkit[key] = (arkit[key] ?? 0) + value * weight;
-      }
+    state.gazeNext -= dt;
+    if (state.gazeNext <= 0) {
+      const glance = Math.random() < (mood === "thinking" ? 0.65 : 0.22);
+      state.gazeTargetX = (Math.random() - 0.5) * (glance ? 0.36 : 0.09);
+      state.gazeTargetY = (Math.random() - 0.5) * (glance ? 0.18 : 0.05);
+      state.gazeNext = glance ? 0.35 + Math.random() * 0.6 : 1.2 + Math.random() * 2.8;
     }
+    state.gazeX = damp(state.gazeX, state.gazeTargetX, 14);
+    state.gazeY = damp(state.gazeY, state.gazeTargetY, 14);
+    const rounded = (speechWeights.O ?? 0) + (speechWeights.U ?? 0) + (speechWeights.PP ?? 0);
+    const smile = (0.065 * (1 - state.speaking) + 0.018 * state.speaking) * (1 - Math.min(1, rounded));
+    const brow = 0.035 + state.thinking * 0.12 + state.energy * 0.11;
 
     for (const face of character.faces) {
+      // Teeth/tongue have only a subset of facial visemes. Supply the missing
+      // jaw component so they follow the lips on I/U/FF instead of staying still.
+      let missingJaw = 0;
+      if (face.hasVisemes) {
+        for (const [viseme, weight] of Object.entries(visemes)) {
+          if (!face.visemes.has(viseme)) missingJaw += (OCULUS_TO_ARKIT[viseme as OculusViseme]?.jawOpen ?? 0) * weight;
+        }
+      }
       for (const { name, index } of face.channels) {
         let target = 0;
         if (name.startsWith("viseme_")) {
-          const viseme = name.slice(7);
-          const intensity = viseme === "aa" ? 0.7 : viseme === "PP" ? 1 : 0.85;
-          target = (speechWeights[viseme] ?? 0) * intensity;
+          target = visemes[name.slice(7)] ?? 0;
+        } else if (name === "jawOpen") {
+          target = face.hasVisemes ? jawBoost + missingJaw : arkit.jawOpen ?? 0;
         } else if (name === "eyeBlinkLeft" || name === "eyeBlinkRight") {
-          target = blinkWeight * 0.9;
+          target = blinkWeight;
+        } else if (name === "eyeLookOutLeft" || name === "eyeLookInRight") {
+          target = Math.max(0, state.gazeX);
+        } else if (name === "eyeLookInLeft" || name === "eyeLookOutRight") {
+          target = Math.max(0, -state.gazeX);
+        } else if (name === "eyeLookUpLeft" || name === "eyeLookUpRight") {
+          target = Math.max(0, state.gazeY);
+        } else if (name === "eyeLookDownLeft" || name === "eyeLookDownRight") {
+          target = Math.max(0, -state.gazeY);
         } else if (name === "browInnerUp") {
-          target = mood === "thinking" ? 0.12 : 0.025;
+          target = brow;
+        } else if (name === "browOuterUpLeft" || name === "browOuterUpRight") {
+          target = brow * (name.endsWith("Left") ? 0.55 : 0.4);
+        } else if (name === "cheekSquintLeft" || name === "cheekSquintRight") {
+          target = smile * 0.65 + state.listening * 0.025;
         } else if (name === "mouthSmileLeft" || name === "mouthSmileRight") {
-          target = frame.speaking ? 0 : 0.04;
+          target = smile * (name.endsWith("Left") ? 1 : 0.85);
         } else if (!face.hasVisemes && /^(mouth|jaw|tongue)/.test(name)) {
           target = Math.min(1, arkit[name] ?? 0);
         }
+        const speechChannel = /^(viseme_|jaw|mouth|tongue)/.test(name) && !name.startsWith("mouthSmile");
+        const speed = name.startsWith("eyeBlink") ? 70 : speechChannel ? (target > face.influences[index] ? 55 : 38) : 10;
+        const smoothing = 1 - Math.exp(-dt * speed);
         // External Three.js buffers are intentionally mutated by the renderer.
         // eslint-disable-next-line react-hooks/immutability -- GLTF morph buffers are Three.js state, not React state
-        face.influences[index] += (target - face.influences[index]) * smoothing;
+        face.influences[index] += (Math.min(1.15, Math.max(0, target)) - face.influences[index]) * smoothing;
       }
     }
 
@@ -194,15 +241,45 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
       const animated = character.bones[name];
       if (!animated) return;
       rotation.setFromEuler(euler.set(x, y, z));
-      animated.bone.quaternion.copy(animated.rest).multiply(rotation);
+      rotation.premultiply(animated.rest);
+      animated.bone.quaternion.slerp(rotation, 1 - Math.exp(-dt * 8));
     };
 
-    // Small skeletal motion keeps the anatomy connected. No independently
-    // translated head, artificial jaw hinge or perpetual exaggerated nodding.
-    const nod = mood === "listening" ? Math.pow(Math.max(0, Math.sin(time * 0.65)), 12) * 0.025 : 0;
-    animateBone("Head", Math.sin(time * 0.8) * 0.008 + nod,
-      Math.sin(time * 0.43) * 0.018, Math.sin(time * 0.31) * 0.008);
-    animateBone("Spine2", Math.sin(time * 1.15) * 0.004, 0, Math.sin(time * 0.4) * 0.003);
+    state.postureNext -= dt;
+    if (state.postureNext <= 0) {
+      state.targetPitch = (Math.random() - 0.5) * 0.035;
+      state.targetYaw = (Math.random() - 0.5) * 0.075;
+      state.targetRoll = (Math.random() - 0.5) * 0.045;
+      state.postureNext = 2.5 + Math.random() * 4;
+    }
+    state.pitch = damp(state.pitch, state.targetPitch, 1.4);
+    state.yaw = damp(state.yaw, state.targetYaw, 1.2);
+    state.roll = damp(state.roll, state.targetRoll, 1.2);
+    state.gestureNext -= dt;
+    const emphasis = frame.speaking && state.energy > 0.22 && (state.energy - state.previousEnergy) / Math.max(dt, 0.001) > 1.5;
+    if (state.gestureNext <= 0 && state.gestureTime < 0 && (emphasis || mood === "listening")) {
+      state.gestureTime = 0;
+      state.gestureDuration = 0.55 + Math.random() * 0.35;
+      state.gestureStrength = (mood === "listening" ? 0.045 : 0.022 + state.energy * 0.025);
+      state.gestureNext = mood === "listening" ? 3 + Math.random() * 4 : 0.9 + Math.random() * 1.5;
+    }
+    let nod = 0;
+    if (state.gestureTime >= 0) {
+      state.gestureTime += dt;
+      const progress = Math.min(1, state.gestureTime / state.gestureDuration);
+      nod = Math.sin(progress * Math.PI) ** 2 * state.gestureStrength;
+      if (progress >= 1) state.gestureTime = -1;
+    }
+    const breath = Math.sin(time * 1.35) * 0.006 + Math.sin(time * 0.73) * 0.002;
+    const sway = Math.sin(time * 0.38) * 0.006 + Math.sin(time * 0.61) * 0.003;
+    const pitch = state.pitch + nod - state.listening * 0.012;
+    animateBone("Head", pitch * 0.7 + breath * 0.4, state.yaw + state.gazeX * 0.08, state.roll + state.thinking * 0.018);
+    animateBone("Neck", pitch * 0.3, state.yaw * 0.3, state.roll * 0.25);
+    animateBone("Spine", breath * 0.35, sway * 0.3, sway * 0.4);
+    animateBone("Spine1", breath * 0.4 - state.listening * 0.005, state.yaw * 0.08, sway * 0.5);
+    animateBone("Spine2", breath + nod * 0.12, state.yaw * 0.12, sway);
+    animateBone("LeftShoulder", 0, 0, breath * 0.6);
+    animateBone("RightShoulder", 0, 0, -breath * 0.6);
   });
 
   return <primitive object={character.model} dispose={null} />;

@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import InterviewerPanel from "@/components/interviewer/InterviewerPanel";
 import { createSpeechFrame, useInterviewerSpeech, type InterviewerMood } from "@/hooks/useInterviewerSpeech";
-import type { OculusViseme } from "@/lib/interviewer/viseme-map";
+import { OCULUS_TO_PROCEDURAL, type OculusViseme } from "@/lib/interviewer/viseme-map";
 
 // Public asset/speech preview so facial controls can be checked without starting
 // a monitored interview, signing in, or granting camera/microphone access.
@@ -37,6 +37,10 @@ export default function InterviewerPreviewPage() {
     stop();
     frame.current.speaking = viseme !== "sil";
     frame.current.visemeWeights = viseme === "sil" ? {} : { [viseme]: 1 };
+    frame.current.hasVisemeTimeline = true;
+    frame.current.mouth = OCULUS_TO_PROCEDURAL[viseme];
+    frame.current.level = viseme === "sil" ? 0 : 0.45;
+    setMood(viseme === "sil" ? "idle" : "speaking");
   };
 
   return (
@@ -58,8 +62,14 @@ export default function InterviewerPreviewPage() {
       </div>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted-foreground">Facial checks:</span>
-        {(["PP", "FF", "aa", "E", "O", "U"] as OculusViseme[]).map((viseme) => (
+        {(["PP", "FF", "TH", "DD", "kk", "CH", "SS", "nn", "RR", "aa", "E", "I", "O", "U"] as OculusViseme[]).map((viseme) => (
           <button key={viseme} className="rounded-md border border-border px-3 py-1.5" onClick={() => pose(viseme)}>{viseme}</button>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Motion checks:</span>
+        {(["idle", "listening", "thinking"] as InterviewerMood[]).map((state) => (
+          <button key={state} className="rounded-md border border-border px-3 py-1.5 capitalize" aria-pressed={mood === state} onClick={() => { stop(); setMood(state); }}>{state}</button>
         ))}
       </div>
     </div>

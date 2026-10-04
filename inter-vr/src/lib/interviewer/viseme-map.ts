@@ -110,21 +110,31 @@ export interface TimedViseme {
 // Preserve the model's authored consonant/vowel poses rather than reducing all
 // phonemes to a generic open jaw. In silence, zero weights restore the bind face.
 export function sampleVisemeWeights(cues: TimedViseme[], timeMs: number): Record<string, number> {
-  const blendMs = 30;
+  const ease = (t: number) => t * t * (3 - 2 * t);
   for (let i = 0; i < cues.length; i++) {
     const cue = cues[i];
-    const end = cue.startMs + cue.durationMs;
+    const next = cues[i + 1];
+    // HeadTTS pads cue edges, so consecutive cues can overlap. Do not let an
+    // earlier cue mask a short consonant that has already started.
+    const end = Math.min(cue.startMs + cue.durationMs, next?.startMs ?? Infinity);
     if (timeMs < cue.startMs) return {};
     if (timeMs >= end) continue;
 
-    const next = cues[i + 1];
-    const nextIsAdjacent = next && next.startMs <= end + 15;
+    const nextIsAdjacent = next && next.startMs <= end;
+    // Keep a readable hold even for fast consonants. Longer vowels have more
+    // time to prepare the lips for the following sound (coarticulation).
+    const durationMs = end - cue.startMs;
+    const blendMs = Math.min(55, durationMs * 0.4, (next?.durationMs ?? 100) * 0.5);
     const transitionStart = Math.max(cue.startMs, end - blendMs);
-    const amount = nextIsAdjacent && timeMs > transitionStart
-      ? Math.min(1, (timeMs - transitionStart) / Math.max(1, end - transitionStart))
+    const amount = cue.viseme !== "sil" && nextIsAdjacent && timeMs > transitionStart
+      ? ease(Math.min(1, (timeMs - transitionStart) / Math.max(1, end - transitionStart)))
       : 0;
+    const previous = cues[i - 1];
+    const startsAfterPause = !previous || previous.viseme === "sil" || previous.startMs + previous.durationMs < cue.startMs;
+    const attack = startsAfterPause ? ease(Math.min(1, (timeMs - cue.startMs) / Math.max(1, Math.min(18, durationMs * 0.2)))) : 1;
+    const release = nextIsAdjacent ? 1 : ease(Math.min(1, (end - timeMs) / Math.max(1, Math.min(28, durationMs * 0.25))));
     const weights: Record<string, number> = {};
-    if (cue.viseme !== "sil") weights[cue.viseme] = 1 - amount;
+    if (cue.viseme !== "sil") weights[cue.viseme] = (1 - amount) * attack * release;
     if (nextIsAdjacent && next.viseme !== "sil" && amount > 0) {
       weights[next.viseme] = (weights[next.viseme] ?? 0) + amount;
     }
@@ -135,60 +145,25 @@ export function sampleVisemeWeights(cues: TimedViseme[], timeMs: number): Record
 
 // Sample timed visemes at a playback time. Returns blended procedural pose.
 export function sampleVisemes(cues: TimedViseme[], timeMs: number): ProceduralMouthPose {
-  if (cues.length === 0) return NEUTRAL_MOUTH;
-  // Find active cue; blend 40ms into the next cue to avoid snapping.
-  const BLEND_MS = 45;
-  for (let i = 0; i < cues.length; i++) {
-    const c = cues[i];
-    const end = c.startMs + c.durationMs;
-    if (timeMs >= c.startMs && timeMs <= end) {
-      const cur = OCULUS_TO_PROCEDURAL[c.viseme] ?? NEUTRAL_MOUTH;
-      const next = cues[i + 1] ? (OCULUS_TO_PROCEDURAL[cues[i + 1].viseme] ?? NEUTRAL_MOUTH) : null;
-      if (next && end - timeMs < BLEND_MS) {
-        const t = 1 - (end - timeMs) / BLEND_MS;
-        // Slight anticipation: ease toward next shape.
-        return lerpPose(cur, next, t * t);
-      }
-      return cur;
-    }
-    if (timeMs < c.startMs) {
-      // Gap = coarticulation toward upcoming shape.
-      const prevPose = i > 0 ? (OCULUS_TO_PROCEDURAL[cues[i - 1].viseme] ?? NEUTRAL_MOUTH) : NEUTRAL_MOUTH;
-      const nextPose = OCULUS_TO_PROCEDURAL[c.viseme] ?? NEUTRAL_MOUTH;
-      const gap = c.startMs - (i > 0 ? cues[i - 1].startMs + cues[i - 1].durationMs : 0);
-      const t = gap > 0 ? 1 - Math.min(1, (c.startMs - timeMs) / gap) : 1;
-      return lerpPose(prevPose, nextPose, t);
+  const pose = { ...NEUTRAL_MOUTH };
+  for (const [viseme, weight] of Object.entries(sampleVisemeWeights(cues, timeMs))) {
+    const shape = OCULUS_TO_PROCEDURAL[viseme as OculusViseme];
+    for (const key of Object.keys(pose) as (keyof ProceduralMouthPose)[]) {
+      pose[key] += shape[key] * weight;
     }
   }
-  return NEUTRAL_MOUTH;
+  return pose;
 }
 
 // Blend ARKit weights for a GLB model at a playback time.
 export function sampleARKitWeights(cues: TimedViseme[], timeMs: number): Record<string, number> {
-  if (cues.length === 0) return { jawOpen: 0.06, mouthClose: 0.2 };
-  const BLEND_MS = 45;
-  for (let i = 0; i < cues.length; i++) {
-    const c = cues[i];
-    const end = c.startMs + c.durationMs;
-    if (timeMs >= c.startMs && timeMs <= end) {
-      const cur = OCULUS_TO_ARKIT[c.viseme] ?? {};
-      const nextCue = cues[i + 1];
-      if (nextCue && end - timeMs < BLEND_MS) {
-        const t = 1 - (end - timeMs) / BLEND_MS;
-        const next = OCULUS_TO_ARKIT[nextCue.viseme] ?? {};
-        const keys = new Set([...Object.keys(cur), ...Object.keys(next)]);
-        const out: Record<string, number> = {};
-        keys.forEach((k) => {
-          out[k] = (cur[k] ?? 0) + ((next[k] ?? 0) - (cur[k] ?? 0)) * (t * t);
-        });
-        return out;
-      }
-      return cur;
+  const weights: Record<string, number> = {};
+  for (const [viseme, weight] of Object.entries(sampleVisemeWeights(cues, timeMs))) {
+    for (const [key, value] of Object.entries(OCULUS_TO_ARKIT[viseme as OculusViseme])) {
+      weights[key] = (weights[key] ?? 0) + value * weight;
     }
   }
-  const last = cues[cues.length - 1];
-  if (timeMs > last.startMs + last.durationMs) return { jawOpen: 0.06, mouthClose: 0.2 };
-  return OCULUS_TO_ARKIT[cues[0].viseme] ?? {};
+  return weights;
 }
 
 // Fallback heuristic when only word timings (browser TTS) are available.
@@ -213,5 +188,32 @@ export function wordToViseme(word: string): OculusViseme {
 }
 
 export function wordsToTimedVisemes(words: { word: string; startMs: number; durationMs: number }[]): TimedViseme[] {
-  return words.map((w) => ({ viseme: wordToViseme(w.word), startMs: w.startMs, durationMs: Math.max(90, w.durationMs) }));
+  // Approximate syllable-level articulation, rather than holding one dominant
+  // pose (often closed PP) for a whole word. Browser TTS exposes no phonemes.
+  return words.flatMap(({ word, startMs, durationMs }) => {
+    const tokens = word.toLowerCase().match(/th|sh|ch|ph|ee|oo|ou|ow|[a-z]/g) ?? [];
+    const shapes: OculusViseme[] = tokens.map((token) => {
+      if (token === "th") return "TH";
+      if (token === "sh" || token === "ch") return "CH";
+      if (token === "ph") return "FF";
+      if (token === "oo") return "U";
+      if (token === "ou" || token === "ow") return "O";
+      if (token === "ee") return "I";
+      if (token === "u" || token === "w") return "U";
+      if (token === "n" || token === "l") return "nn";
+      if (token === "i" || token === "y") return "I";
+      return wordToViseme(token);
+    }).filter((shape, index, all) => index === 0 || shape !== all[index - 1]);
+    if (shapes.length === 0) shapes.push("sil");
+    if (/[.,!?;:]$/.test(word)) shapes.push("sil");
+    const length = (shape: OculusViseme) => ["aa", "E", "I", "O", "U"].includes(shape) ? 1.6 : shape === "PP" ? 0.7 : 1;
+    const total = shapes.reduce((sum, shape) => sum + length(shape), 0);
+    let cursor = startMs;
+    return shapes.map((viseme) => {
+      const duration = Math.max(1, durationMs) * length(viseme) / total;
+      const cue = { viseme, startMs: cursor, durationMs: duration };
+      cursor += duration;
+      return cue;
+    });
+  });
 }
