@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { parseGradingResult } from "@/lib/interview/grading";
 
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_GEMINI_API_KEY,
@@ -79,13 +80,16 @@ Return this exact JSON structure:
     const { text } = await generateText({
       model: google("gemini-2.5-flash"),
       prompt,
+      maxRetries: 0,
+      providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+      abortSignal: AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
     });
 
     const cleaned = text
       .replace(/```json\n?/g, "")
       .replace(/```\n?/g, "")
       .trim();
-    const grading = JSON.parse(cleaned);
+    const grading = parseGradingResult(JSON.parse(cleaned));
 
     // Persist grading to Supabase
     if (sessionId !== undefined && questionIndex !== undefined) {
@@ -104,19 +108,24 @@ Return this exact JSON structure:
             answer_transcript: answer,
             grading,
           };
-          await supabase
+          const { error: saveError } = await supabase
             .from("interview_sessions")
             .update({ questions: updatedQuestions })
             .eq("id", sessionId);
+          if (saveError) throw new Error("Could not save your feedback. Please retry grading.");
         }
       }
     }
 
     return NextResponse.json({ grading });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Grading error:", error);
+    const status = error && typeof error === "object" && "statusCode" in error ? error.statusCode : undefined;
+    if (status === 429) {
+      return NextResponse.json({ error: "The grading provider has reached its quota or rate limit. Your answer is retained; retry later or continue without feedback." }, { status: 429 });
+    }
     return NextResponse.json(
-      { error: error.message || "Grading failed" },
+      { error: error instanceof Error ? error.message : "Grading failed" },
       { status: 500 },
     );
   }

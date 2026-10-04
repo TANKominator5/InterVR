@@ -36,6 +36,7 @@ interface Props {
   modelLoading: boolean;
   modelProgress: string;
   onPreloadVoice: () => void;
+  voiceError?: string;
 }
 
 const MOOD_META: Record<InterviewerMood, { icon: typeof Volume2; label: string }> = {
@@ -53,6 +54,7 @@ export default function InterviewerPanel({
   modelLoading,
   modelProgress,
   onPreloadVoice,
+  voiceError,
 }: Props) {
   const meta = MOOD_META[mood] ?? MOOD_META.idle;
   const Icon = meta.icon;
@@ -78,8 +80,8 @@ export default function InterviewerPanel({
             {phaseLabel}
           </span>
         </div>
-        <span className="hidden text-xs text-muted-foreground sm:inline" title={engine === "browser" ? "Browser voice uses approximate lip timing" : "Speech is generated locally on your device"}>
-          {engine === "headtts" ? "On-device voice" : engine === "browser" ? "Browser voice" : "Preparing voice"}
+        <span className="hidden text-xs text-muted-foreground sm:inline" title={engine === "unrealspeech" ? "Unreal Speech API voice with audio-driven lip animation" : engine === "browser" ? "Browser fallback voice uses approximate lip timing" : "Speech is generated locally on your device"}>
+          {engine === "unrealspeech" ? "Unreal Speech voice" : engine === "headtts" ? "Local fallback voice" : engine === "browser" ? "Browser fallback voice" : "Preparing voice"}
         </span>
       </div>
 
@@ -97,17 +99,18 @@ export default function InterviewerPanel({
         </div>
       </div>
 
+      {voiceError && <p role="status" className="border-t border-border px-4 py-2 text-xs text-amber-500">{voiceError}</p>}
       {modelLoading ? (
         <div className="px-4 py-2.5 flex items-center gap-2 text-xs text-muted-foreground border-t border-border">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          {modelProgress || "Preparing local voice model…"}
+          {modelProgress || "Preparing voice…"}
         </div>
-      ) : engine !== "headtts" ? (
+      ) : engine !== "unrealspeech" ? (
         <button
           onClick={onPreloadVoice}
           className="w-full px-4 py-2 text-xs text-primary hover:bg-primary/5 border-t border-border transition-colors"
         >
-          Load local voice for synchronized speech →
+          Retry dedicated voice →
         </button>
       ) : null}
     </div>

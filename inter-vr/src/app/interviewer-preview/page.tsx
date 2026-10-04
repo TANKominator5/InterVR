@@ -50,7 +50,7 @@ export default function InterviewerPreviewPage() {
         <p className="mt-1 text-sm text-muted-foreground">Test the human model and speech without starting an interview.</p>
       </div>
       <InterviewerPanel frameRef={frame} mood={mood} phaseLabel={mood} engine={speech.engine}
-        modelLoading={speech.loading} modelProgress={speech.progress} onPreloadVoice={() => void speech.preload()} />
+        modelLoading={speech.loading} modelProgress={speech.progress} voiceError={speech.error} onPreloadVoice={() => void speech.preload()} />
       <label className="block text-sm font-medium">
         Preview question
         <textarea className="mt-2 min-h-24 w-full rounded-xl border border-border bg-card p-3" value={text} onChange={(event) => setText(event.target.value)} />
@@ -58,7 +58,7 @@ export default function InterviewerPreviewPage() {
       <div className="flex flex-wrap gap-2">
         <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" onClick={() => void speak()} disabled={busy || !text.trim()}>Speak question</button>
         <button className="rounded-lg border border-border px-4 py-2 text-sm" onClick={stop}>Stop / neutral</button>
-        <button className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-50" disabled={speech.loading || speech.engine === "headtts"} onClick={() => void speech.preload()}>Load free local voice</button>
+        <button className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-50" disabled={speech.loading || speech.engine === "headtts"} onClick={() => void speech.preloadLocalVoice()}>Load optional local fallback</button>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="text-muted-foreground">Facial checks:</span>

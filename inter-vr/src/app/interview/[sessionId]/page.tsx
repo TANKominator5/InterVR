@@ -4,12 +4,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import InterviewerPanel from "@/components/interviewer/InterviewerPanel";
+import AnswerFeedback from "@/components/interviewer/AnswerFeedback";
+import { parseGradingResult, type GradingResult } from "@/lib/interview/grading";
+import { useAnswerRecording } from "@/hooks/useAnswerRecording";
 import { useInterviewerSpeech, createSpeechFrame, type InterviewerMood } from "@/hooks/useInterviewerSpeech";
 import {
   Mic,
-  MicOff,
   Square,
-  ChevronRight,
   Loader2,
   CheckCircle2,
   AlertCircle,
@@ -20,7 +21,6 @@ import {
   Activity,
   AlertTriangle,
   ShieldAlert,
-  XCircle,
   Maximize,
 } from "lucide-react";
 import useVideoAntiCheat from "@/hooks/useVideoAntiCheat";
@@ -51,19 +51,28 @@ interface Question {
   expected_answer_outline: string;
   follow_up_hint: string;
   answer_transcript?: string;
-  grading?: any;
+  grading?: GradingResult;
 }
 
-interface GradingResult {
-  accuracy_score: number;
-  depth_score: number;
-  communication_score: number;
-  overall_score: number;
-  feedback: string;
-  needs_followup: boolean;
-  followup_question?: string;
-  is_complete: boolean;
+interface InterviewSession {
+  id: string;
+  questions: Question[];
+  topic: string;
+  difficulty: string;
+  duration: string;
 }
+
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void>;
+  mozRequestFullScreen?: () => Promise<void>;
+  msRequestFullscreen?: () => Promise<void>;
+};
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element;
+  mozFullScreenElement?: Element;
+  msFullscreenElement?: Element;
+};
+type AudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
 export default function InterviewRoomPage() {
   const params = useParams();
@@ -72,8 +81,8 @@ export default function InterviewRoomPage() {
   const supabase = createClient();
 
   const [phase, setPhase] = useState<InterviewPhase>("loading");
-  const [session, setSession] = useState<any>(null);
-  const [userContext, setUserContext] = useState<any>(null);
+  const [session, setSession] = useState<InterviewSession | null>(null);
+  const [userContext, setUserContext] = useState<Record<string, unknown> | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
@@ -88,6 +97,14 @@ export default function InterviewRoomPage() {
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
   const [authToken, setAuthToken] = useState("");
+  const [answerError, setAnswerError] = useState("");
+  const [processingLabel, setProcessingLabel] = useState("");
+  const [reportError, setReportError] = useState("");
+  const recording = useAnswerRecording();
+  const lastAnswerRef = useRef<{ audio: Blob; transcript: string } | null>(null);
+  const submittingRef = useRef(false);
+  const advancingRef = useRef(false);
+  const answerAbortRef = useRef<AbortController | null>(null);
 
   // ── Fullscreen / Integrity Lock ────────────────────────────────────────────
   const [violationCount, setViolationCount] = useState(0);
@@ -103,16 +120,12 @@ export default function InterviewRoomPage() {
   const [isCodeCounterActive, setIsCodeCounterActive] = useState(false);
   const [submittedCode, setSubmittedCode] = useState("");
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const antiCheatVideoRef = useRef<HTMLVideoElement>(null);
   const lastFlushedEventIndexRef = useRef(0);
 
-  // ── 3D Interviewer (free, browser-only) ───────────────────────────────────
-  // Shared mutable speech frame: HeadTTS/browser TTS writes mouth poses here,
+  // ── 3D Interviewer ──────────────────────────────────────────────────────
+  // Shared mutable speech frame: API/local/browser audio writes mouth poses here,
   // the R3F avatar reads them every frame without React re-renders.
   const interviewerFrameRef = useMemo(() => createSpeechFrame(), []);
   const interviewerSpeech = useInterviewerSpeech(interviewerFrameRef);
@@ -165,11 +178,11 @@ export default function InterviewRoomPage() {
   // ── Fullscreen Helpers ─────────────────────────────────────────────────────
   const enterFullscreen = useCallback(async () => {
     try {
-      const el = document.documentElement;
+      const el = document.documentElement as FullscreenElement;
       if (el.requestFullscreen) await el.requestFullscreen();
-      else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen();
-      else if ((el as any).mozRequestFullScreen) await (el as any).mozRequestFullScreen();
-      else if ((el as any).msRequestFullscreen) await (el as any).msRequestFullscreen();
+      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      else if (el.mozRequestFullScreen) await el.mozRequestFullScreen();
+      else if (el.msRequestFullscreen) await el.msRequestFullscreen();
     } catch (err) {
       console.warn("[Fullscreen] Could not enter fullscreen:", err);
     }
@@ -186,9 +199,9 @@ export default function InterviewRoomPage() {
   const isFullscreen = useCallback(() => {
     return !!(
       document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
-      (document as any).mozFullScreenElement ||
-      (document as any).msFullscreenElement
+      (document as FullscreenDocument).webkitFullscreenElement ||
+      (document as FullscreenDocument).mozFullScreenElement ||
+      (document as FullscreenDocument).msFullscreenElement
     );
   }, []);
 
@@ -388,7 +401,7 @@ export default function InterviewRoomPage() {
 
     try {
       audioCtx = new (
-        window.AudioContext || (window as any).webkitAudioContext
+        window.AudioContext || (window as AudioWindow).webkitAudioContext!
       )();
     } catch (e) {
       console.warn("Web Audio API not supported", e);
@@ -460,7 +473,7 @@ export default function InterviewRoomPage() {
 
     try {
       audioCtx = new (
-        window.AudioContext || (window as any).webkitAudioContext
+        window.AudioContext || (window as AudioWindow).webkitAudioContext!
       )();
     } catch (e) {
       console.warn("Web Audio API not supported", e);
@@ -579,7 +592,7 @@ export default function InterviewRoomPage() {
     };
   }, [phase, isInterviewTerminated, showViolationOverlay, isFullscreen, handleViolation]);
 
-  // ── TTS: free local viseme speech (HeadTTS) with browser fallback ─────────
+  // ── TTS: dedicated API voice with visible fallback status ───────────────
   // The interviewer avatar reads mouth poses from interviewerFrameRef while
   // this promise is pending; it resolves when audio playback finishes.
   const speak = useCallback(
@@ -594,8 +607,7 @@ export default function InterviewRoomPage() {
     [interviewerSpeech],
   );
 
-  // Warm up the free local voice while the user is on the "ready" screen so
-  // the first question starts fast. Falls back silently to browser TTS.
+  // Check the configured API voice without downloading a local model.
   useEffect(() => {
     if (phase === "ready") {
       window.speechSynthesis?.getVoices();
@@ -631,45 +643,14 @@ export default function InterviewRoomPage() {
     setPhase("listening");
   }, [questions, speak, enterFullscreen]);
 
-  // ── Recording (audio) + Live Transcription (SpeechRecognition) ────────────
-  const recognitionRef = useRef<any>(null);
-  const liveTranscriptRef = useRef<string>("");
-
+  // ── Recording + live transcription ──────────────────────────────────────
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      mediaRecorderRef.current = recorder;
-      chunksRef.current = [];
-      liveTranscriptRef.current = "";
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      recorder.start(1000);
-
-      // Start browser SpeechRecognition for live transcription
-      const SpeechRecognition =
-        (window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = "en-US";
-        recognition.onresult = (event: any) => {
-          let finalText = "";
-          for (let i = 0; i < event.results.length; i++) {
-            finalText += event.results[i][0].transcript;
-          }
-          liveTranscriptRef.current = finalText;
-        };
-        recognition.onerror = () => { }; // Silently handle
-        recognition.start();
-        recognitionRef.current = recognition;
-      }
-
+      setAnswerError("");
+      setGrading(null);
+      setTranscript("");
+      lastAnswerRef.current = null;
+      await recording.start();
       setPhase("recording");
     } catch {
       setError("Microphone access denied. Please allow microphone access.");
@@ -677,169 +658,146 @@ export default function InterviewRoomPage() {
     }
   };
 
-  const stopRecording = (): Promise<Blob> => {
-    return new Promise((resolve) => {
-      // Stop SpeechRecognition
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch { }
-      }
-
-      const recorder = mediaRecorderRef.current;
-      if (!recorder) {
-        resolve(new Blob());
-        return;
-      }
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        // NOTE: We only stop audio tracks here now, because we want the video feed to stay alive for anti-cheat
-        streamRef.current?.getAudioTracks().forEach((t) => t.stop());
-        resolve(blob);
-      };
-      recorder.stop();
-    });
-  };
-
   // ── Submit Answer ──────────────────────────────────────────────────────────
-  const submitAnswer = async () => {
+  const submitAnswer = async (retry = false) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    const controller = new AbortController();
+    answerAbortRef.current = controller;
+    setAnswerError("");
+    setGrading(null);
     setPhase("processing");
-
-    // 1. Stop recording + get audio blob
-    const audioBlob = await stopRecording();
-
-    // Decode WebM blob to raw PCM float32 for Meyda analysis
-    let voiceAnalysisData = { confidenceScore: null, details: {} };
     try {
-      const audioCtx = new AudioContext();
-      const encodedBuffer = await audioBlob.arrayBuffer();
-      const decodedAudio = await audioCtx.decodeAudioData(encodedBuffer);
-      const pcmData = decodedAudio.getChannelData(0); // mono float32
-      await audioCtx.close();
+      setProcessingLabel("Finishing your recording…");
+      const answer = retry ? lastAnswerRef.current : await recording.stop();
+      if (!answer) throw new Error("No recorded answer is available. Please record again.");
+      lastAnswerRef.current = answer;
+      let answerText = answer.transcript.trim();
 
-      const voiceAnalysis = await fetch("/api/analyze-audio", {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: pcmData.buffer,
-      });
-      voiceAnalysisData = await voiceAnalysis.json();
-    } catch (e) {
-      console.warn("Voice analysis failed:", e);
-    }
-    console.log(voiceAnalysisData);
-    // 2. Get transcript — prefer browser SpeechRecognition (instant)
-    let transcribedText = liveTranscriptRef.current.trim();
-
-    // If browser STT failed, try AssemblyAI as fallback
-    if (!transcribedText && audioBlob.size > 0) {
-      try {
+      // The live transcript is already available at Stop; skip decoding and
+      // uploading unused PCM analysis before transcription or grading.
+      if (!answerText) {
+        if (!answer.audio.size) throw new Error("No audio was recorded. Please record again.");
+        setProcessingLabel("Transcribing your recording…");
         const formData = new FormData();
-        formData.append("audio", audioBlob, "answer.webm");
-        const sttRes = await fetch("/api/interview/stt", {
-          method: "POST",
-          body: formData,
+        formData.append("audio", answer.audio, answer.audio.type.includes("mp4") ? "answer.mp4" : "answer.webm");
+        const response = await fetch("/api/interview/stt", {
+          method: "POST", body: formData,
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(35_000)]),
         });
-        const sttData = await sttRes.json();
-        if (sttData.transcript) transcribedText = sttData.transcript;
-      } catch { }
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Transcription failed. Please retry.");
+        answerText = typeof data.transcript === "string" ? data.transcript.trim() : "";
+        if (!answerText) throw new Error("No speech was detected. Please record your answer again.");
+        lastAnswerRef.current = { ...answer, transcript: answerText };
+      }
+      setTranscript(answerText);
+      setProcessingLabel("Grading your answer…");
+
+      // Refresh the token for long interviews rather than reusing an expired
+      // token captured when the room was first opened.
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const token = authSession?.access_token;
+      if (!token) throw new Error("Your sign-in has expired. Please sign in again.");
+      setAuthToken(token);
+      const questionToGrade = isFollowup ? { ...currentQuestion, question: followupText } : currentQuestion;
+      const response = await fetch("/api/interview/grade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ sessionId, questionIndex: currentQIndex, question: questionToGrade, answer: answerText, userContext }),
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(40_000)]),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Grading failed. Please retry.");
+      const result = parseGradingResult(data.grading);
+      if (controller.signal.aborted) return;
+      setGrading(result);
+      setAnsweredCount((count) => count + 1);
+      setCumulativeScore((score) => score + result.overall_score * 10);
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setAnswerError(error instanceof Error && error.name !== "TimeoutError" ? error.message : "This request took too long. Your recording is saved; please retry.");
+    } finally {
+      submittingRef.current = false;
+      if (!controller.signal.aborted) setPhase("feedback");
     }
-
-    if (!transcribedText) {
-      setTranscript("[Could not transcribe audio]");
-    } else {
-      setTranscript(transcribedText);
-    }
-
-    const answerText = transcribedText || "[No answer detected]";
-
-    // 3. Grade with Groq
-    const questionToGrade = isFollowup
-      ? { ...currentQuestion, question: followupText }
-      : currentQuestion;
-
-    const gradeRes = await fetch("/api/interview/grade", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
-      body: JSON.stringify({
-        sessionId,
-        questionIndex: currentQIndex,
-        question: questionToGrade,
-        answer: answerText,
-        userContext,
-      }),
-    });
-    const { grading: gradingResult } = await gradeRes.json();
-    setGrading(gradingResult);
-    setAnsweredCount((c) => c + 1);
-    setCumulativeScore((s) => s + ((gradingResult?.overall_score || 0) * 10));
-    setPhase("feedback");
   };
+
+  useEffect(() => () => { answerAbortRef.current?.abort(); }, []);
 
   // ── Next Question ──────────────────────────────────────────────────────────
   const proceedNext = async () => {
-    // If grading says follow-up needed and we havent done one yet
-    if (grading?.needs_followup && grading.followup_question && !isFollowup) {
-      setIsFollowup(true);
-      setFollowupText(grading.followup_question);
+    if (advancingRef.current) return;
+    advancingRef.current = true;
+    setAnswerError("");
+    lastAnswerRef.current = null;
+    try {
+      // Ask at most one follow-up per question, including the last question.
+      if (grading?.needs_followup && grading.followup_question && !isFollowup) {
+        setIsFollowup(true);
+        setFollowupText(grading.followup_question);
+        setGrading(null);
+        setTranscript("");
+        setPhase("speaking");
+        await speak(`Follow-up: ${grading.followup_question}`);
+        setPhase("listening");
+        return;
+      }
+
+      setIsFollowup(false);
+      setFollowupText("");
       setGrading(null);
       setTranscript("");
+      setCodeAnalysis(null);
+      setIsAnalyzingCode(false);
+      setCodeCounterQuestion("");
+      setIsCodeCounterActive(false);
+      setSubmittedCode("");
+
+      const nextIndex = currentQIndex + 1;
+      if (nextIndex >= questions.length) {
+        setPhase("speaking");
+        await speak("Excellent! That concludes our interview. Let me prepare your performance report now.");
+        setPhase("completed");
+        void generateReport();
+        return;
+      }
+      setCurrentQIndex(nextIndex);
+      setCurrentQuestion(questions[nextIndex]);
       setPhase("speaking");
-      await speak(`Follow-up: ${grading.followup_question}`);
+      await speak(`Question ${nextIndex + 1}: ${questions[nextIndex].question}`);
       setPhase("listening");
-      return;
+    } finally {
+      advancingRef.current = false;
     }
-
-    setIsFollowup(false);
-    setFollowupText("");
-    setGrading(null);
-    setTranscript("");
-
-    // Reset sandbox state
-    setCodeAnalysis(null);
-    setIsAnalyzingCode(false);
-    setCodeCounterQuestion("");
-    setIsCodeCounterActive(false);
-    setSubmittedCode("");
-
-    const nextIndex = currentQIndex + 1;
-
-    if (nextIndex >= questions.length) {
-      // Interview complete — generate report
-      setPhase("speaking");
-      await speak(
-        "Excellent! That concludes our interview. Let me prepare your performance report now.",
-      );
-      setPhase("completed");
-      generateReport();
-      return;
-    }
-
-    setCurrentQIndex(nextIndex);
-    setCurrentQuestion(questions[nextIndex]);
-    setPhase("speaking");
-    await speak(`Question ${nextIndex + 1}: ${questions[nextIndex].question}`);
-    setPhase("listening");
   };
 
   // ── Generate Report ────────────────────────────────────────────────────────
   const generateReport = async () => {
-    const res = await fetch("/api/interview/report", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authToken}` },
-      body: JSON.stringify({
-        sessionId,
-        browserAntiCheatSummary: {
-          tabSwitchCount: browserAntiCheat.tabSwitchCount,
-          windowBlurCount: browserAntiCheat.windowBlurCount,
-          pasteCount: browserAntiCheat.pasteCount,
-          isFlagged: browserAntiCheat.isFlagged,
-          totalEvents: browserAntiCheat.events.length,
-        },
-      }),
-    });
-    const data = await res.json();
-    if (data.reportId) setReportId(data.reportId);
+    setReportError("");
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const res = await fetch("/api/interview/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${authSession?.access_token || authToken}` },
+        signal: AbortSignal.timeout(60_000),
+        body: JSON.stringify({
+          sessionId,
+          browserAntiCheatSummary: {
+            tabSwitchCount: browserAntiCheat.tabSwitchCount,
+            windowBlurCount: browserAntiCheat.windowBlurCount,
+            pasteCount: browserAntiCheat.pasteCount,
+            isFlagged: browserAntiCheat.isFlagged,
+            totalEvents: browserAntiCheat.events.length,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.reportId) throw new Error(data.error || "Could not generate your report.");
+      setReportId(data.reportId);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Report generation failed. Please retry.");
+    }
   };
 
   // ── Code Sandbox Handler ──────────────────────────────────────────────────
@@ -972,6 +930,11 @@ export default function InterviewRoomPage() {
             >
               View Full Report →
             </button>
+          ) : reportError ? (
+            <div role="alert" className="space-y-3 text-sm">
+              <p className="text-amber-500">{reportError}</p>
+              <button onClick={() => void generateReport()} className="rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground">Retry report</button>
+            </div>
           ) : (
             <div className="flex items-center gap-2 text-muted-foreground font-medium">
               <Loader2 className="w-5 h-5 animate-spin text-primary" />
@@ -1142,6 +1105,7 @@ export default function InterviewRoomPage() {
                 engine={interviewerSpeech.engine}
                 modelLoading={interviewerSpeech.loading}
                 modelProgress={interviewerSpeech.progress}
+                voiceError={interviewerSpeech.error}
                 onPreloadVoice={() => void interviewerSpeech.preload()}
               />
               {/* Browser Anti-Cheat Warning Banner */}
@@ -1232,7 +1196,8 @@ export default function InterviewRoomPage() {
                       <div key={i} className="w-1 bg-red-500 rounded-full animate-bounce" style={{ height: `${6 + Math.sin(i) * 10 + 10}px`, animationDelay: `${i * 0.08}s` }} />
                     ))}
                   </div>
-                  <button onClick={submitAnswer} className="flex items-center gap-2 px-8 py-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 font-semibold hover:bg-red-500/30 transition">
+                  {recording.liveTranscript && <p role="status" className="max-w-xl text-sm text-muted-foreground">{recording.liveTranscript}</p>}
+                  <button onClick={() => void submitAnswer()} className="flex items-center gap-2 px-8 py-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 font-semibold hover:bg-red-500/30 transition">
                     <Square className="w-4 h-4 fill-current" />
                     Stop & Submit
                   </button>
@@ -1243,36 +1208,16 @@ export default function InterviewRoomPage() {
                 <div className="flex flex-col items-center gap-4">
                   <div className="flex items-center gap-3 px-6 py-3 bg-card border border-border shadow-sm rounded-xl">
                     <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                    <span className="text-foreground font-medium text-sm">Transcribing and grading your answer...</span>
+                    <span role="status" className="text-foreground font-medium text-sm">{processingLabel}</span>
                   </div>
                 </div>
               )}
 
-              {phase === "feedback" && grading && (
-                <div className="w-full space-y-4">
-                  {transcript && (
-                    <div className="bg-card border border-border shadow-sm rounded-xl p-4">
-                      <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-bold">Your Answer (Transcribed)</p>
-                      <p className="text-foreground text-sm font-medium leading-relaxed">{transcript}</p>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-3 gap-3">
-                    {[{ label: "Accuracy", value: grading.accuracy_score, color: "text-blue-500" }, { label: "Depth", value: grading.depth_score, color: "text-primary" }, { label: "Communication", value: grading.communication_score, color: "text-orange-600" }].map(({ label, value, color }) => (
-                      <div key={label} className="bg-muted border border-border shadow-sm rounded-xl p-4 text-center">
-                        <div className={`text-2xl font-black ${color}`}>{value}<span className="text-sm text-muted-foreground">/10</span></div>
-                        <div className="text-xs text-muted-foreground font-semibold mt-1">{label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="bg-card border border-border shadow-sm rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-bold">AI Feedback</p>
-                    <p className="text-foreground text-sm font-medium leading-relaxed">{grading.feedback}</p>
-                  </div>
-                  <button onClick={proceedNext} className="w-full flex items-center justify-center gap-2 py-4 bg-primary shadow-md rounded-xl text-primary-foreground font-bold hover:opacity-90 transition">
-                    {currentQIndex + 1 >= questions.length ? "Finish Interview" : grading.needs_followup ? "Answer Follow-up" : "Next Question"}
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
+              {phase === "feedback" && (
+                <AnswerFeedback grading={grading} transcript={transcript} error={answerError}
+                  isFollowup={isFollowup} isLastQuestion={currentQIndex + 1 >= questions.length}
+                  onRetry={() => void submitAnswer(true)} onRecordAgain={() => setPhase("listening")}
+                  onContinue={() => void proceedNext()} />
               )}
 
               {/* Code counter question banner */}
@@ -1357,6 +1302,7 @@ export default function InterviewRoomPage() {
                   engine={interviewerSpeech.engine}
                   modelLoading={interviewerSpeech.loading}
                   modelProgress={interviewerSpeech.progress}
+                  voiceError={interviewerSpeech.error}
                   onPreloadVoice={() => void interviewerSpeech.preload()}
                 />
                 {/* Browser Anti-Cheat Warning Banner */}
@@ -1462,8 +1408,9 @@ export default function InterviewRoomPage() {
                         />
                       ))}
                     </div>
+                    {recording.liveTranscript && <p role="status" className="max-w-xl text-sm text-muted-foreground">{recording.liveTranscript}</p>}
                     <button
-                      onClick={submitAnswer}
+                      onClick={() => void submitAnswer()}
                       className="flex items-center gap-2 px-8 py-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-400 font-semibold hover:bg-red-500/30 transition"
                     >
                       <Square className="w-4 h-4 fill-current" />
@@ -1476,63 +1423,18 @@ export default function InterviewRoomPage() {
                   <div className="flex flex-col items-center gap-4">
                     <div className="flex items-center gap-3 px-6 py-3 bg-card border border-border shadow-sm rounded-xl">
                       <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                      <span className="text-foreground font-medium text-sm">
-                        Transcribing and grading your answer...
+                      <span role="status" className="text-foreground font-medium text-sm">
+                        {processingLabel}
                       </span>
                     </div>
                   </div>
                 )}
 
-                {phase === "feedback" && grading && (
-                  <div className="w-full space-y-4">
-                    {transcript && (
-                      <div className="bg-card border border-border shadow-sm rounded-xl p-4">
-                        <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-bold">
-                          Your Answer (Transcribed)
-                        </p>
-                        <p className="text-foreground text-sm font-medium leading-relaxed">
-                          {transcript}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { label: "Accuracy", value: grading.accuracy_score, color: "text-blue-500" },
-                        { label: "Depth", value: grading.depth_score, color: "text-primary" },
-                        { label: "Communication", value: grading.communication_score, color: "text-orange-600" },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} className="bg-muted border border-border shadow-sm rounded-xl p-4 text-center">
-                          <div className={`text-2xl font-black ${color}`}>
-                            {value}
-                            <span className="text-sm text-muted-foreground">/10</span>
-                          </div>
-                          <div className="text-xs text-muted-foreground font-semibold mt-1">{label}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="bg-card border border-border shadow-sm rounded-xl p-4">
-                      <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-bold">
-                        AI Feedback
-                      </p>
-                      <p className="text-foreground text-sm font-medium leading-relaxed">
-                        {grading.feedback}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={proceedNext}
-                      className="w-full flex items-center justify-center gap-2 py-4 bg-primary shadow-md rounded-xl text-primary-foreground font-bold hover:opacity-90 transition"
-                    >
-                      {currentQIndex + 1 >= questions.length
-                        ? "Finish Interview"
-                        : grading.needs_followup
-                          ? "Answer Follow-up"
-                          : "Next Question"}
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
-                  </div>
+                {phase === "feedback" && (
+                  <AnswerFeedback grading={grading} transcript={transcript} error={answerError}
+                    isFollowup={isFollowup} isLastQuestion={currentQIndex + 1 >= questions.length}
+                    onRetry={() => void submitAnswer(true)} onRecordAgain={() => setPhase("listening")}
+                    onContinue={() => void proceedNext()} />
                 )}
               </>
             )}

@@ -1,95 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { transcribeAudio } from "@/lib/interview/transcription";
+
+export const maxDuration = 40;
 
 export async function POST(request: NextRequest) {
+  const started = performance.now();
+  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]);
   try {
+    if (!process.env.ASSEMBLYAI_API_KEY) {
+      return NextResponse.json({ error: "API transcription is unavailable: ASSEMBLYAI_API_KEY is not configured." }, { status: 503 });
+    }
     const formData = await request.formData();
-    const audioFile = formData.get("audio") as File;
-
-    if (!audioFile) {
-      return NextResponse.json(
-        { error: "Missing audio file" },
-        { status: 400 },
-      );
+    const audio = formData.get("audio");
+    if (!(audio instanceof File) || !audio.size) {
+      return NextResponse.json({ error: "Missing or empty audio recording." }, { status: 400 });
     }
-
-    const audioBuffer = await audioFile.arrayBuffer();
-
-    // Step 1: Upload audio to AssemblyAI
-    const uploadResponse = await fetch("https://api.assemblyai.com/v2/upload", {
-      method: "POST",
-      headers: {
-        Authorization: process.env.ASSEMBLYAI_API_KEY!,
-        "Content-Type": "application/octet-stream",
-      },
-      body: audioBuffer,
+    const transcript = await transcribeAudio(audio, process.env.ASSEMBLYAI_API_KEY, signal);
+    const durationMs = Math.round(performance.now() - started);
+    console.info("[STT] AssemblyAI universal-2 completed in", durationMs, "ms");
+    return NextResponse.json({ transcript, provider: "assemblyai", durationMs }, {
+      headers: { "Server-Timing": `transcription;dur=${durationMs}` },
     });
-
-    if (!uploadResponse.ok) {
-      throw new Error(`Upload failed: ${uploadResponse.status}`);
-    }
-
-    const { upload_url } = await uploadResponse.json();
-
-    // Step 2: Request transcription
-    const transcriptResponse = await fetch(
-      "https://api.assemblyai.com/v2/transcript",
-      {
-        method: "POST",
-        headers: {
-          Authorization: process.env.ASSEMBLYAI_API_KEY!,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          audio_url: upload_url,
-          speech_models: ["universal-3-pro"],
-        }),
-      },
-    );
-
-    if (!transcriptResponse.ok) {
-      const errorBody = await transcriptResponse.text();
-      throw new Error(
-        `Transcription request failed: ${transcriptResponse.status} - ${errorBody}`,
-      );
-    }
-
-    const { id: transcriptId } = await transcriptResponse.json();
-
-    // Step 3: Poll for completion
-    let transcript = null;
-    const maxAttempts = 60;
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, 1000));
-
-      const pollResponse = await fetch(
-        `https://api.assemblyai.com/v2/transcript/${transcriptId}`,
-        {
-          headers: {
-            Authorization: process.env.ASSEMBLYAI_API_KEY!,
-          },
-        },
-      );
-
-      const result = await pollResponse.json();
-
-      if (result.status === "completed") {
-        transcript = result.text;
-        break;
-      } else if (result.status === "error") {
-        throw new Error(`Transcription error: ${result.error}`);
-      }
-    }
-
-    if (!transcript) {
-      throw new Error("Transcription timed out");
-    }
-
-    return NextResponse.json({ transcript });
-  } catch (error: any) {
-    console.error("STT error:", error);
-    return NextResponse.json(
-      { error: error.message || "Transcription failed" },
-      { status: 500 },
-    );
+  } catch (error) {
+    console.error("[STT] Request failed:", error);
+    return NextResponse.json({
+      error: signal.aborted ? "Transcription took too long. Your recording is saved; retry or record again." : error instanceof Error ? error.message : "Transcription failed. Please retry.",
+    }, { status: signal.aborted ? 504 : 502 });
   }
 }
