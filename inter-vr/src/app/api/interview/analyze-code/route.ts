@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { createAdminClient } from "@/utils/supabase/admin";
-
-const google = createGoogleGenerativeAI({
-    apiKey: process.env.GOOGLE_GEMINI_API_KEY,
-});
+import { getInterviewGenerationOptions } from "@/lib/interview/models";
 
 interface UserContext {
     year_of_study?: string;
@@ -106,7 +102,7 @@ Rules:
 - Be fair for the candidate's level (${userContext?.year_of_study || "student"})`;
 
         const { text } = await generateText({
-            model: google("gemini-2.5-flash"),
+            ...getInterviewGenerationOptions("codeAnalysis"),
             prompt,
         });
 

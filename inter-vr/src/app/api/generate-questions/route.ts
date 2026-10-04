@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/utils/supabase/admin";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
-
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GEMINI_API_KEY,
-});
-const NIM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+import { getInterviewGenerationOptions, INTERVIEW_MODELS } from "@/lib/interview/models";
 
 function buildPrompt(
   userContext: any,
@@ -42,11 +37,11 @@ Return ONLY a valid JSON object: {"questions": [...]}
 Each question must have: id (number), question (string), category (conceptual|practical|scenario|coding), difficulty (easy|medium|hard), expected_answer_outline (string), follow_up_hint (string)`;
 }
 
-// Use Gemini via Vercel AI SDK
+// Use Gemma via the Google API and Vercel AI SDK.
 async function generateQuestions(prompt: string): Promise<any[]> {
-  console.log("Using Gemini for question generation...");
+  console.log(`Using ${INTERVIEW_MODELS.questions} for question generation...`);
   const { text } = await generateText({
-    model: google("gemini-2.5-flash"),
+    ...getInterviewGenerationOptions("questions"),
     prompt,
   });
   const cleaned = text
@@ -130,9 +125,9 @@ export async function POST(request: NextRequest) {
 
     const prompt = buildPrompt(userContext, session, questionCount);
 
-    // Generate questions using Gemini directly
+    // Generate questions using the task-specific Gemma model.
     const questions = await generateQuestions(prompt);
-    const source = "gemini";
+    const source = "gemma";
 
     const { error: updateError } = await supabaseAdmin
       .from("interview_sessions")

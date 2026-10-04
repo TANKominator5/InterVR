@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { createAdminClient } from "@/utils/supabase/admin";
-
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GEMINI_API_KEY,
-});
+import { getInterviewGenerationOptions } from "@/lib/interview/models";
 
 export async function POST(request: NextRequest) {
   try {
@@ -75,7 +71,7 @@ Feedback: ${q.grading?.feedback}
       .join("\n\n");
 
     const { text } = await generateText({
-      model: google("gemini-2.5-flash"),
+      ...getInterviewGenerationOptions("report"),
       prompt: `You are an expert hiring manager generating a final interview report.
 Return ONLY valid JSON with no markdown fences.
 

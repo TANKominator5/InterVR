@@ -20,6 +20,30 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Interview models — GemmaAI-Alt
+
+The four interview LLM tasks use Gemma 4 through the Google Gemini API with the
+existing server-side `GOOGLE_GEMINI_API_KEY`. Model selection is centralized in
+`src/lib/interview/models.ts`:
+
+| Task | Model | Selection rationale |
+| --- | --- | --- |
+| Interview questions | `gemma-4-26b-a4b-it` | MoE model for efficient question generation |
+| Answer grading | `gemma-4-26b-a4b-it` | Interactive scoring within the existing grading deadline |
+| Code analysis | `gemma-4-31b-it` | Dense model for correctness, complexity, and code review |
+| Final reports | `gemma-4-26b-a4b-it` | MoE model for efficient synthesis of the interview transcript |
+
+The configured key's model catalog exposed these two Gemma variants, both with
+`generateContent` support. The tasks therefore share models by complexity rather
+than using unavailable model IDs. These routes have no Gemini or Groq fallback.
+Hosted Gemma models still have Google API quotas and rate limits.
+
+Generation uses Gemma 4's supported `thinkingLevel: "minimal"` setting to limit
+reasoning latency. The Gemini 2.5-specific `thinkingBudget` option is not sent.
+
+Resume processing retains its existing Gemini implementation. Speech
+transcription and text-to-speech retain their existing providers and behavior.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

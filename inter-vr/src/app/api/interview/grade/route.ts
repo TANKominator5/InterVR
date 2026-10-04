@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText } from "ai";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { parseGradingResult } from "@/lib/interview/grading";
-
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_GEMINI_API_KEY,
-});
+import { getInterviewGenerationOptions } from "@/lib/interview/models";
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,10 +74,9 @@ Return this exact JSON structure:
 }`;
 
     const { text } = await generateText({
-      model: google("gemini-2.5-flash"),
+      ...getInterviewGenerationOptions("grading"),
       prompt,
       maxRetries: 0,
-      providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
       abortSignal: AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]),
     });
 
