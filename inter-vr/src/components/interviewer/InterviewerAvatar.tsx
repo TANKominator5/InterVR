@@ -14,6 +14,12 @@ const MODEL_URL = "/models/interviewer.glb";
 interface AvatarProps {
   frameRef: { current: SpeechFrame };
   mood: InterviewerMood;
+  onStatusChange?: (status: "loading" | "ready" | "error") => void;
+}
+
+export function preloadInterviewerModel() {
+  // Shares the exact loader/decoder cache used by the visible character.
+  useGLTF.preload(MODEL_URL);
 }
 
 interface FaceMesh {
@@ -57,19 +63,34 @@ function prepareCharacter(source: THREE.Group) {
     }
 
     const tuneMaterial = (original: THREE.Material) => {
-      const material = original.clone();
+      let material = original.clone();
       if (material instanceof THREE.MeshStandardMaterial) {
         // Preserve all original skin, eye, hair and suit texture maps.
-        material.envMapIntensity = 0.55;
-        if (/body/i.test(material.name)) material.roughness = 0.72;
-        if (/high-poly/i.test(material.name)) material.roughness = 0.28;
-        if (/teeth/i.test(material.name)) material.roughness = 0.38;
-        if (/casualsuit/i.test(material.name)) {
-          // Use the original fitted garment and fabric normal map, with a
-          // restrained charcoal colour instead of the example's bright logo.
-          material.map = null;
-          material.color.set("#293646");
-          material.roughness = 0.88;
+        material.envMapIntensity = 0.4;
+        if (/body|skin/i.test(material.name)) {
+          // Retain the authored albedo/normal/roughness maps. A broad skin
+          // highlight plus a faint oily surface layer avoids the matte doll look.
+          const skin = new THREE.MeshPhysicalMaterial();
+          THREE.MeshStandardMaterial.prototype.copy.call(skin, material);
+          material.dispose();
+          skin.metalness = 0;
+          skin.roughness = 0.48;
+          skin.specularIntensity = 0.55;
+          skin.specularColor.set("#ffe9dd");
+          skin.clearcoat = 0.08;
+          skin.clearcoatRoughness = 0.5;
+          material = skin;
+        }
+        if (material instanceof THREE.MeshStandardMaterial) {
+          if (/high-poly|eye/i.test(material.name)) material.roughness = 0.2;
+          if (/hair/i.test(material.name)) material.roughness = 0.65;
+          if (/teeth/i.test(material.name)) material.roughness = 0.42;
+          if (/casualsuit/i.test(material.name)) {
+            // Preserve fabric relief with a restrained charcoal colour.
+            material.map = null;
+            material.color.set("#293646");
+            material.roughness = 0.88;
+          }
         }
       }
       return material;
@@ -77,6 +98,9 @@ function prepareCharacter(source: THREE.Group) {
     object.material = Array.isArray(object.material)
       ? object.material.map(tuneMaterial)
       : tuneMaterial(object.material);
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    object.castShadow = !materials.some((material) => material.transparent);
+    object.receiveShadow = true;
   });
 
   model.updateMatrixWorld(true);
@@ -117,7 +141,8 @@ function prepareCharacter(source: THREE.Group) {
 function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: () => void }) {
   const { scene } = useGLTF(MODEL_URL);
   const character = useMemo(() => prepareCharacter(scene), [scene]);
-  const { camera, size } = useThree();
+  const { camera, size, gl, scene: renderScene } = useThree();
+  const warmup = useRef({ compiled: false, frames: 0, ready: false });
   const blink = useRef({ next: 2.8, elapsed: -1, duration: 0.17 });
   const motion = useRef({
     energy: 0, previousEnergy: 0, speaking: 0, listening: 0, thinking: 0,
@@ -129,8 +154,19 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
   const euler = useMemo(() => new THREE.Euler(), []);
 
   useEffect(() => {
-    onReady();
+    let cancelled = false;
+    warmup.current = { compiled: false, frames: 0, ready: false };
+    // Compile the skinned/morph-target shaders while the ready screen is open.
+    // Readiness is reported after a rendered frame, not merely a GLTF download.
+    void gl.compileAsync(renderScene, camera).then(() => {
+      if (!cancelled) warmup.current.compiled = true;
+    }).catch((error: unknown) => {
+      console.warn("[InterviewerAvatar] Shader warmup unavailable", error);
+      // The normal render path can still compile synchronously on older GPUs.
+      if (!cancelled) warmup.current.compiled = true;
+    });
     return () => {
+      cancelled = true;
       // Materials are cloned per instance; geometry and textures remain owned
       // by the loader cache and must stay usable when the layout remounts.
       character.model.traverse((object) => {
@@ -139,7 +175,7 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
         materials.forEach((material) => material.dispose());
       });
     };
-  }, [character.model, onReady]);
+  }, [character.model, camera, gl, renderScene]);
 
   // Fixed portrait camera; keep enough vertical space on narrow coding panels.
   useEffect(() => {
@@ -150,6 +186,10 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
   }, [camera, character.target, size.width, size.height]);
 
   useFrame(({ clock }, delta) => {
+    if (warmup.current.compiled && !warmup.current.ready && ++warmup.current.frames >= 2) {
+      warmup.current.ready = true;
+      onReady();
+    }
     const time = clock.elapsedTime;
     const dt = Math.min(delta, 0.05);
     const frame = frameRef.current;
@@ -189,8 +229,8 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
     state.gazeX = damp(state.gazeX, state.gazeTargetX, 14);
     state.gazeY = damp(state.gazeY, state.gazeTargetY, 14);
     const rounded = (speechWeights.O ?? 0) + (speechWeights.U ?? 0) + (speechWeights.PP ?? 0);
-    const smile = (0.065 * (1 - state.speaking) + 0.018 * state.speaking) * (1 - Math.min(1, rounded));
-    const brow = 0.035 + state.thinking * 0.12 + state.energy * 0.11;
+    const smile = (0.04 * (1 - state.speaking) + 0.008 * state.speaking) * (1 - Math.min(1, rounded));
+    const brow = 0.025 + state.thinking * 0.07 + state.energy * 0.045;
 
     for (const face of character.faces) {
       // Teeth/tongue have only a subset of facial visemes. Supply the missing
@@ -229,11 +269,13 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
           target = Math.min(1, arkit[name] ?? 0);
         }
         const speechChannel = /^(viseme_|jaw|mouth|tongue)/.test(name) && !name.startsWith("mouthSmile");
-        const speed = name.startsWith("eyeBlink") ? 70 : speechChannel ? (target > face.influences[index] ? 55 : 38) : 10;
+        // Ease vowels into place; retain a fast attack for brief M/B/P closure.
+        const speed = name.startsWith("eyeBlink") ? 70 : speechChannel
+          ? (name === "viseme_PP" || name === "mouthClose" ? 60 : target > face.influences[index] ? 32 : 26) : 10;
         const smoothing = 1 - Math.exp(-dt * speed);
         // External Three.js buffers are intentionally mutated by the renderer.
         // eslint-disable-next-line react-hooks/immutability -- GLTF morph buffers are Three.js state, not React state
-        face.influences[index] += (Math.min(1.15, Math.max(0, target)) - face.influences[index]) * smoothing;
+        face.influences[index] += (Math.min(1, Math.max(0, target)) - face.influences[index]) * smoothing;
       }
     }
 
@@ -287,23 +329,37 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
 
 export default function InterviewerAvatar(props: AvatarProps) {
   const [loaded, setLoaded] = useState(false);
-  const onReady = useCallback(() => setLoaded(true), []);
+  const { onStatusChange } = props;
+  const onReady = useCallback(() => {
+    setLoaded(true);
+    onStatusChange?.("ready");
+  }, [onStatusChange]);
+  useEffect(() => { onStatusChange?.("loading"); }, [onStatusChange]);
   return (
     <div className="relative h-full w-full">
       <Canvas
         camera={{ position: [0, 1.5, 1.3], fov: 30, near: 0.05, far: 20 }}
-        dpr={[1, 1.5]}
+        dpr={[1, 2]}
+        shadows="soft"
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        onCreated={({ gl }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1;
+        }}
         fallback={<div className="p-6 text-sm text-white/70">3D rendering is unavailable in this browser.</div>}
       >
-        <ambientLight intensity={0.35} color="#e7ebef" />
-        <directionalLight position={[1.8, 3.2, 3]} intensity={2.2} color="#fff0df" />
-        <directionalLight position={[-2, 2, 2]} intensity={0.75} color="#dce8ff" />
-        <directionalLight position={[0.5, 2.5, -1.5]} intensity={1.3} color="#ffffff" />
+        <ambientLight intensity={0.16} color="#e7ebef" />
+        <directionalLight position={[-1.8, 2.7, 3]} intensity={1.9} color="#fff2e7"
+          castShadow shadow-mapSize={[2048, 2048]} shadow-normalBias={0.003} shadow-bias={-0.00015}
+          shadow-camera-left={-1.2} shadow-camera-right={1.2}
+          shadow-camera-top={2.2} shadow-camera-bottom={-0.2}
+          shadow-camera-near={0.1} shadow-camera-far={8} />
+        <directionalLight position={[2, 2, 2]} intensity={0.45} color="#e5edff" />
+        <directionalLight position={[0.5, 2.5, -1.5]} intensity={0.65} color="#ffffff" />
         {/* Generated light cards provide eye reflections without an HDR download. */}
-        <Environment resolution={64} frames={1}>
-          <Lightformer position={[2, 3, 4]} scale={[3, 3, 1]} intensity={2} />
-          <Lightformer position={[-3, 2, 3]} scale={[2, 3, 1]} intensity={0.8} color="#dce8ff" />
+        <Environment resolution={128} frames={1}>
+          <Lightformer position={[-2, 3, 4]} scale={[3, 3, 1]} intensity={1.5} color="#fff2e7" />
+          <Lightformer position={[3, 2, 3]} scale={[2, 3, 1]} intensity={0.6} color="#e5edff" />
         </Environment>
         <Suspense fallback={null}>
           <HumanInterviewer {...props} onReady={onReady} />

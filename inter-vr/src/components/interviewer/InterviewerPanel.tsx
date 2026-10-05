@@ -10,12 +10,13 @@ const InterviewerAvatar = dynamic(() => import("./InterviewerAvatar"), {
   loading: () => <div className="flex h-full items-center justify-center text-sm text-white/60">Preparing interviewer…</div>,
 });
 
-class AvatarBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class AvatarBoundary extends Component<{ children: ReactNode; onStatusChange?: Props["onAvatarStatusChange"] }, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError() { return { failed: true }; }
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[InterviewerAvatar] Could not render human model", error, info.componentStack);
+    this.props.onStatusChange?.("error");
   }
   render() {
     if (this.state.failed) return (
@@ -37,6 +38,7 @@ interface Props {
   modelProgress: string;
   onPreloadVoice: () => void;
   voiceError?: string;
+  onAvatarStatusChange?: (status: "loading" | "ready" | "error") => void;
 }
 
 const MOOD_META: Record<InterviewerMood, { icon: typeof Volume2; label: string }> = {
@@ -55,6 +57,7 @@ export default function InterviewerPanel({
   modelProgress,
   onPreloadVoice,
   voiceError,
+  onAvatarStatusChange,
 }: Props) {
   const meta = MOOD_META[mood] ?? MOOD_META.idle;
   const Icon = meta.icon;
@@ -88,8 +91,8 @@ export default function InterviewerPanel({
       <div className="relative h-[340px] sm:h-[380px]" style={{ background: "radial-gradient(ellipse at 40% 35%, #666d67 0%, #3a423e 45%, #232c29 100%)" }}>
         <div aria-hidden className="pointer-events-none absolute inset-y-0 right-[12%] w-px bg-white/10" />
         <div aria-hidden className="pointer-events-none absolute inset-y-0 right-[24%] w-px bg-white/5" />
-        <AvatarBoundary>
-          <InterviewerAvatar frameRef={frameRef} mood={mood} />
+        <AvatarBoundary onStatusChange={onAvatarStatusChange}>
+          <InterviewerAvatar frameRef={frameRef} mood={mood} onStatusChange={onAvatarStatusChange} />
         </AvatarBoundary>
         <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/55 border border-white/10 backdrop-blur">

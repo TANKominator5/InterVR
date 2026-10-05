@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { createClient } from "@/utils/supabase/client";
+import { preloadInterviewer } from "@/lib/interviewer/preload";
 import {
   History,
   Mic,
@@ -157,6 +158,8 @@ export default function DashboardPage() {
 
   const router = useRouter();
 
+  useEffect(() => { void preloadInterviewer(); }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -275,6 +278,7 @@ export default function DashboardPage() {
 
   const startSimulation = async () => {
     setIsStarting(true);
+    void preloadInterviewer();
     try {
       const {
         data: { user },

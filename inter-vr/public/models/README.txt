@@ -19,3 +19,12 @@ textures (maximum 2048px). Rig and facial shapes preserved. 36.82MB -> 3.55MB.
 The renderer uses a cloned skeleton, a fixed head-and-shoulders camera,
 and direct viseme targets; silence restores the neutral face. The example's
 outfit is recoloured charcoal and the arms are posed down from the rig's A-pose.
+
+Conversational articulation attenuates the maximum vowel shapes (especially
+aa/E/I/O/U), normalizes overlapping cues, and does not add a second jaw morph
+on top of authored visemes. Skin uses physical specular shading with the
+original textures, directional self-shadows, and restrained portrait lighting.
+
+The dashboard preloads the renderer/GLTF decoder cache. The interview ready
+screen renders the same canvas used by the first question and warms up its
+shaders before enabling Start Interview, including for coding questions.

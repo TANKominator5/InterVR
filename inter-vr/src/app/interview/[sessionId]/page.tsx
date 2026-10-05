@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import InterviewerPanel from "@/components/interviewer/InterviewerPanel";
+import { preloadInterviewer } from "@/lib/interviewer/preload";
 import AnswerFeedback from "@/components/interviewer/AnswerFeedback";
 import { parseGradingResult, type GradingResult } from "@/lib/interview/grading";
 import { useAnswerRecording } from "@/hooks/useAnswerRecording";
@@ -129,6 +130,8 @@ export default function InterviewRoomPage() {
   // the R3F avatar reads them every frame without React re-renders.
   const interviewerFrameRef = useMemo(() => createSpeechFrame(), []);
   const interviewerSpeech = useInterviewerSpeech(interviewerFrameRef);
+  const [avatarStatus, setAvatarStatus] = useState<"loading" | "ready" | "error">("loading");
+  useEffect(() => { void preloadInterviewer(); }, []);
   const interviewerMood: InterviewerMood =
     phase === "speaking" || phase === "followup"
       ? "speaking"
@@ -629,6 +632,7 @@ export default function InterviewRoomPage() {
 
   // ── Start Interview ────────────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
+    if (avatarStatus === "loading") return;
     // Enter fullscreen when interview starts
     await enterFullscreen();
 
@@ -641,7 +645,7 @@ export default function InterviewRoomPage() {
     setCurrentQuestion(q);
     await speak(`Question 1: ${q.question}`);
     setPhase("listening");
-  }, [questions, speak, enterFullscreen]);
+  }, [questions, speak, enterFullscreen, avatarStatus]);
 
   // ── Recording + live transcription ──────────────────────────────────────
   const startRecording = async () => {
@@ -876,11 +880,40 @@ export default function InterviewRoomPage() {
   }
 
   // ── UI ─────────────────────────────────────────────────────────────────────
-  const isCodingQuestion = currentQuestion?.category === "coding";
+  // Pick the first question's layout on the ready screen too. Starting the
+  // interview then retains the already-rendered canvas and GPU resources.
+  const isCodingQuestion = (currentQuestion ?? (phase === "ready" ? questions[0] : null))?.category === "coding";
   const progressPct =
     questions.length > 0 ? (currentQIndex / questions.length) * 100 : 0;
   const avgScore =
     answeredCount > 0 ? Math.round(cumulativeScore / answeredCount) : 0;
+
+  const readyScreen = (
+    <div className="text-center space-y-6">
+      <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto border border-primary/20 shadow-sm">
+        <Brain className="w-10 h-10 text-primary" />
+      </div>
+      <h2 className="text-2xl font-bold text-foreground">Ready to Begin?</h2>
+      <p className="text-muted-foreground font-medium">
+        {session?.topic} • {session?.difficulty} • {session?.duration}
+      </p>
+      <p className="text-muted-foreground text-sm">
+        {questions.length} questions prepared. The AI interviewer will speak each question aloud.
+      </p>
+      <div className="flex items-center gap-2 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-500 text-sm">
+        <ShieldAlert className="w-4 h-4 shrink-0" />
+        <span>
+          Clicking &quot;Start Interview&quot; will enter <strong>fullscreen mode</strong>.
+          Tab switching and minimizing are not allowed. 3 violations will terminate the session.
+        </span>
+      </div>
+      {avatarStatus === "error" && <p role="status" className="text-sm text-amber-500">The 3D interviewer is unavailable. You can still continue with voice.</p>}
+      <button onClick={startInterview} disabled={avatarStatus === "loading"}
+        className="px-10 py-4 bg-primary rounded-2xl text-primary-foreground font-bold text-lg hover:bg-primary/90 transition shadow-md disabled:opacity-60 disabled:cursor-wait">
+        {avatarStatus === "loading" ? "Preparing interviewer…" : "Start Interview"}
+      </button>
+    </div>
+  );
 
   if (phase === "loading")
     return (
@@ -1092,7 +1125,7 @@ export default function InterviewRoomPage() {
       </div>
 
       {/* Main Content */}
-      {isCodingQuestion && (phase === "speaking" || phase === "listening" || phase === "recording" || phase === "processing" || phase === "feedback" || phase === "followup") && currentQuestion ? (
+      {isCodingQuestion && (phase === "ready" || phase === "speaking" || phase === "listening" || phase === "recording" || phase === "processing" || phase === "feedback" || phase === "followup") ? (
         /* ── Side-by-side layout for coding questions ──────────────── */
         <PanelGroup orientation="horizontal" className="flex-1 flex min-h-0">
           {/* LEFT PANEL — Question + voice controls */}
@@ -1107,7 +1140,9 @@ export default function InterviewRoomPage() {
                 modelProgress={interviewerSpeech.progress}
                 voiceError={interviewerSpeech.error}
                 onPreloadVoice={() => void interviewerSpeech.preload()}
+                onAvatarStatusChange={setAvatarStatus}
               />
+              {phase === "ready" ? readyScreen : currentQuestion && <>
               {/* Browser Anti-Cheat Warning Banner */}
               {browserAntiCheat.showWarning && (
                 <div className="w-full flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
@@ -1227,6 +1262,7 @@ export default function InterviewRoomPage() {
                   <p className="font-medium">{codeCounterQuestion}</p>
                 </div>
               )}
+              </>}
             </div>
           </Panel>
 
@@ -1235,6 +1271,11 @@ export default function InterviewRoomPage() {
 
           {/* RIGHT PANEL — Code Sandbox */}
           <Panel defaultSize="60%" minSize="40%">
+            {phase === "ready" ? (
+              <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
+                Your coding workspace will open when the interview starts.
+              </div>
+            ) : (
             <AnimatePresence>
               <motion.div
                 key="sandbox"
@@ -1253,39 +1294,24 @@ export default function InterviewRoomPage() {
                 />
               </motion.div>
             </AnimatePresence>
+            )}
           </Panel>
         </PanelGroup>
       ) : (
         /* ── Single-column layout for non-coding / ready / etc ─────── */
         <div className="flex-1 flex flex-col items-center px-4 py-6 max-w-4xl mx-auto w-full gap-5">
-          {phase === "ready" && (
-            <div className="text-center space-y-6">
-              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto border border-primary/20 shadow-sm">
-                <Brain className="w-10 h-10 text-primary" />
-              </div>
-              <h2 className="text-2xl font-bold text-foreground">Ready to Begin?</h2>
-              <p className="text-muted-foreground font-medium">
-                {session?.topic} • {session?.difficulty} • {session?.duration}
-              </p>
-              <p className="text-muted-foreground text-sm">
-                {questions.length} questions prepared. The AI interviewer will
-                speak each question aloud.
-              </p>
-              <div className="flex items-center gap-2 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-500 text-sm">
-                <ShieldAlert className="w-4 h-4 shrink-0" />
-                <span>
-                  Clicking &quot;Start Interview&quot; will enter <strong>fullscreen mode</strong>.
-                  Tab switching and minimizing are not allowed. 3 violations will terminate the session.
-                </span>
-              </div>
-              <button
-                onClick={startInterview}
-                className="px-10 py-4 bg-primary rounded-2xl text-primary-foreground font-bold text-lg hover:bg-primary/90 transition shadow-md"
-              >
-                Start Interview
-              </button>
-            </div>
-          )}
+          <InterviewerPanel
+            frameRef={interviewerFrameRef}
+            mood={interviewerMood}
+            phaseLabel={phase}
+            engine={interviewerSpeech.engine}
+            modelLoading={interviewerSpeech.loading}
+            modelProgress={interviewerSpeech.progress}
+            voiceError={interviewerSpeech.error}
+            onPreloadVoice={() => void interviewerSpeech.preload()}
+            onAvatarStatusChange={setAvatarStatus}
+          />
+          {phase === "ready" && readyScreen}
 
           {(phase === "speaking" ||
             phase === "listening" ||
@@ -1295,16 +1321,6 @@ export default function InterviewRoomPage() {
             phase === "followup") &&
             currentQuestion && (
               <>
-                <InterviewerPanel
-                  frameRef={interviewerFrameRef}
-                  mood={interviewerMood}
-                  phaseLabel={phase}
-                  engine={interviewerSpeech.engine}
-                  modelLoading={interviewerSpeech.loading}
-                  modelProgress={interviewerSpeech.progress}
-                  voiceError={interviewerSpeech.error}
-                  onPreloadVoice={() => void interviewerSpeech.preload()}
-                />
                 {/* Browser Anti-Cheat Warning Banner */}
                 {browserAntiCheat.showWarning && (
                   <div className="w-full flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
