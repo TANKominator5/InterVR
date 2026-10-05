@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import InterviewerPanel from "@/components/interviewer/InterviewerPanel";
 import { preloadInterviewer } from "@/lib/interviewer/preload";
+import { normalizeInterviewer, type InterviewerId } from "@/lib/interviewer/profiles";
 import AnswerFeedback from "@/components/interviewer/AnswerFeedback";
 import { parseGradingResult, type GradingResult } from "@/lib/interview/grading";
 import { useAnswerRecording } from "@/hooks/useAnswerRecording";
@@ -61,6 +62,7 @@ interface InterviewSession {
   topic: string;
   difficulty: string;
   duration: string;
+  interviewer?: InterviewerId;
 }
 
 type FullscreenElement = HTMLElement & {
@@ -129,9 +131,10 @@ export default function InterviewRoomPage() {
   // Shared mutable speech frame: API/local/browser audio writes mouth poses here,
   // the R3F avatar reads them every frame without React re-renders.
   const interviewerFrameRef = useMemo(() => createSpeechFrame(), []);
-  const interviewerSpeech = useInterviewerSpeech(interviewerFrameRef);
+  const interviewer = normalizeInterviewer(session?.interviewer);
+  const interviewerSpeech = useInterviewerSpeech(interviewerFrameRef, interviewer);
   const [avatarStatus, setAvatarStatus] = useState<"loading" | "ready" | "error">("loading");
-  useEffect(() => { void preloadInterviewer(); }, []);
+  useEffect(() => { void preloadInterviewer(interviewer); }, [interviewer]);
   const interviewerMood: InterviewerMood =
     phase === "speaking" || phase === "followup"
       ? "speaking"
@@ -1133,6 +1136,7 @@ export default function InterviewRoomPage() {
             <div className="h-full overflow-y-auto p-6 flex flex-col gap-6">
               <InterviewerPanel
                 frameRef={interviewerFrameRef}
+                interviewer={interviewer}
                 mood={interviewerMood}
                 phaseLabel={phase}
                 engine={interviewerSpeech.engine}
@@ -1302,6 +1306,7 @@ export default function InterviewRoomPage() {
         <div className="flex-1 flex flex-col items-center px-4 py-6 max-w-4xl mx-auto w-full gap-5">
           <InterviewerPanel
             frameRef={interviewerFrameRef}
+            interviewer={interviewer}
             mood={interviewerMood}
             phaseLabel={phase}
             engine={interviewerSpeech.engine}

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { INTERVIEWERS, isInterviewerId, normalizeInterviewer } from "@/lib/interviewer/profiles";
 
 export async function GET() {
   return NextResponse.json({ provider: "unrealspeech", configured: Boolean(process.env.UNREAL_SPEECH_API_KEY) }, {
@@ -8,9 +9,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, voice } = await request.json();
+    const { text, voice, interviewer } = await request.json();
     if (typeof text !== "string" || !text.trim() || text.length > 1000) {
       return NextResponse.json({ error: "TTS requires 1–1000 characters of text." }, { status: 400 });
+    }
+    if (interviewer !== undefined && !isInterviewerId(interviewer)) {
+      return NextResponse.json({ error: "Choose a male or female interviewer." }, { status: 400 });
     }
     if (!process.env.UNREAL_SPEECH_API_KEY) {
       return NextResponse.json({ error: "Dedicated voice is unavailable: UNREAL_SPEECH_API_KEY is not configured." }, { status: 503 });
@@ -24,7 +28,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         // v8 uses Kokoro voice IDs; the old v7 "Dan" voice returns HTTP 400.
-        Text: text.trim(), VoiceId: voice || "am_michael", Bitrate: "192k", Speed: "0", Pitch: "1", Codec: "libmp3lame",
+        Text: text.trim(), VoiceId: voice || INTERVIEWERS[normalizeInterviewer(interviewer)].voice, Bitrate: "192k", Speed: "0", Pitch: "1", Codec: "libmp3lame",
       }),
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]),
     });

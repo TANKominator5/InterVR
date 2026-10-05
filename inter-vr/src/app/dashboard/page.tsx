@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { createClient } from "@/utils/supabase/client";
 import { preloadInterviewer } from "@/lib/interviewer/preload";
+import InterviewerChoice from "@/components/interviewer/InterviewerChoice";
+import { DEFAULT_INTERVIEWER, normalizeInterviewer, type InterviewerId } from "@/lib/interviewer/profiles";
 import {
   History,
   Mic,
@@ -142,6 +144,7 @@ export default function DashboardPage() {
   const [difficulty, setDifficulty] = useState("Medium (Junior/Mid)");
   const [duration, setDuration] = useState("Short (15m)");
   const [tone, setTone] = useState("Strict");
+  const [interviewer, setInterviewer] = useState<InterviewerId>(DEFAULT_INTERVIEWER);
   const [isStarting, setIsStarting] = useState(false);
 
   const [userData, setUserData] = useState<any>(null);
@@ -158,7 +161,16 @@ export default function DashboardPage() {
 
   const router = useRouter();
 
-  useEffect(() => { void preloadInterviewer(); }, []);
+  useEffect(() => {
+    try { setInterviewer(normalizeInterviewer(localStorage.getItem("inter-vr:interviewer"))); }
+    catch { /* Device storage may be disabled. The default remains available. */ }
+  }, []);
+  useEffect(() => { void preloadInterviewer(interviewer); }, [interviewer]);
+
+  const chooseInterviewer = (choice: InterviewerId) => {
+    setInterviewer(choice);
+    try { localStorage.setItem("inter-vr:interviewer", choice); } catch { /* Optional preference storage. */ }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -278,7 +290,7 @@ export default function DashboardPage() {
 
   const startSimulation = async () => {
     setIsStarting(true);
-    void preloadInterviewer();
+    void preloadInterviewer(interviewer);
     try {
       const {
         data: { user },
@@ -299,6 +311,7 @@ export default function DashboardPage() {
           difficulty,
           duration,
           tone,
+          interviewer,
           status: "pending",
         })
         .select()
@@ -647,6 +660,8 @@ export default function DashboardPage() {
                   </Select>
                 </div>
               </div>
+
+              <InterviewerChoice value={interviewer} onChange={chooseInterviewer} disabled={isStarting} />
 
               <div className="pt-4 flex flex-col items-center gap-6">
                 <Button

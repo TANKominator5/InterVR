@@ -8,18 +8,18 @@ import { clone } from "three/addons/utils/SkeletonUtils.js";
 import type { SpeechFrame, InterviewerMood } from "@/hooks/useInterviewerSpeech";
 import { OCULUS_TO_ARKIT, type OculusViseme } from "@/lib/interviewer/viseme-map";
 import { buildSpeechPose } from "@/lib/interviewer/speech-animation";
-
-const MODEL_URL = "/models/interviewer.glb";
+import { DEFAULT_INTERVIEWER, INTERVIEWERS, type InterviewerId } from "@/lib/interviewer/profiles";
 
 interface AvatarProps {
   frameRef: { current: SpeechFrame };
   mood: InterviewerMood;
+  interviewer?: InterviewerId;
   onStatusChange?: (status: "loading" | "ready" | "error") => void;
 }
 
-export function preloadInterviewerModel() {
+export function preloadInterviewerModel(interviewer: InterviewerId = DEFAULT_INTERVIEWER) {
   // Shares the exact loader/decoder cache used by the visible character.
-  useGLTF.preload(MODEL_URL);
+  useGLTF.preload(INTERVIEWERS[interviewer].modelUrl);
 }
 
 interface FaceMesh {
@@ -36,10 +36,11 @@ interface AnimatedBone {
 
 // Clone the skeleton as well as the mesh: the GLTF loader cache must not be
 // animated directly, especially when moving between interview layouts.
-function prepareCharacter(source: THREE.Group) {
+function prepareCharacter(source: THREE.Group, interviewer: InterviewerId) {
   const model = clone(source);
   const faces: FaceMesh[] = [];
   const bones: Record<string, AnimatedBone> = {};
+  const eyeMaterials: THREE.MeshBasicMaterial[] = [];
 
   model.traverse((object) => {
     if (object instanceof THREE.Bone) {
@@ -64,6 +65,16 @@ function prepareCharacter(source: THREE.Group) {
 
     const tuneMaterial = (original: THREE.Material) => {
       let material = original.clone();
+      // Reference-projected surfaces already contain the portrait's lighting.
+      // Preserve those colours rather than applying a second exposure curve.
+      if (interviewer === "female" && material instanceof THREE.MeshBasicMaterial) {
+        material.toneMapped = false;
+        if (/high-poly/i.test(material.name)) {
+          material.transparent = true;
+          material.depthWrite = false;
+          eyeMaterials.push(material);
+        }
+      }
       if (material instanceof THREE.MeshStandardMaterial) {
         // Preserve all original skin, eye, hair and suit texture maps.
         material.envMapIntensity = 0.4;
@@ -74,21 +85,21 @@ function prepareCharacter(source: THREE.Group) {
           THREE.MeshStandardMaterial.prototype.copy.call(skin, material);
           material.dispose();
           skin.metalness = 0;
-          skin.roughness = 0.48;
-          skin.specularIntensity = 0.55;
-          skin.specularColor.set("#ffe9dd");
-          skin.clearcoat = 0.08;
-          skin.clearcoatRoughness = 0.5;
+          skin.roughness = interviewer === "female" ? 0.55 : 0.48;
+          skin.specularIntensity = interviewer === "female" ? 0.38 : 0.55;
+          skin.specularColor.set(interviewer === "female" ? "#fff0e4" : "#ffe9dd");
+          skin.clearcoat = interviewer === "female" ? 0.025 : 0.08;
+          skin.clearcoatRoughness = interviewer === "female" ? 0.6 : 0.5;
           material = skin;
         }
         if (material instanceof THREE.MeshStandardMaterial) {
-          if (/high-poly|eye/i.test(material.name)) material.roughness = 0.2;
-          if (/hair/i.test(material.name)) material.roughness = 0.65;
+          if (/high-poly|eye/i.test(material.name)) material.roughness = interviewer === "female" ? 0.12 : 0.2;
+          if (/hair/i.test(material.name)) material.roughness = interviewer === "female" ? 0.72 : 0.65;
           if (/teeth/i.test(material.name)) material.roughness = 0.42;
           if (/casualsuit/i.test(material.name)) {
             // Preserve fabric relief with a restrained charcoal colour.
             material.map = null;
-            material.color.set("#293646");
+            material.color.set(INTERVIEWERS[interviewer].outfitColor);
             material.roughness = 0.88;
           }
         }
@@ -100,6 +111,9 @@ function prepareCharacter(source: THREE.Group) {
       : tuneMaterial(object.material);
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     object.castShadow = !materials.some((material) => material.transparent);
+    // Fine alpha hair cards should not cast hard polygon-shaped shadows across
+    // Bella's eyes and forehead under the portrait's directional key light.
+    if (materials.some((material) => /^Bella[._]hair_/.test(material.name))) object.castShadow = false;
     object.receiveShadow = true;
   });
 
@@ -135,12 +149,12 @@ function prepareCharacter(source: THREE.Group) {
   const headPosition = bones.Head?.bone.getWorldPosition(new THREE.Vector3());
   const target = new THREE.Vector3(0, headPosition ? headPosition.y - 0.01 : 1.54, 0);
 
-  return { model, faces, bones, target };
+  return { model, faces, bones, target, eyeMaterials };
 }
 
-function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: () => void }) {
-  const { scene } = useGLTF(MODEL_URL);
-  const character = useMemo(() => prepareCharacter(scene), [scene]);
+function HumanInterviewer({ frameRef, mood, interviewer = DEFAULT_INTERVIEWER, onReady }: AvatarProps & { onReady: () => void }) {
+  const { scene } = useGLTF(INTERVIEWERS[interviewer].modelUrl);
+  const character = useMemo(() => prepareCharacter(scene, interviewer), [scene, interviewer]);
   const { camera, size, gl, scene: renderScene } = useThree();
   const warmup = useRef({ compiled: false, frames: 0, ready: false });
   const blink = useRef({ next: 2.8, elapsed: -1, duration: 0.17 });
@@ -179,11 +193,12 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
 
   // Fixed portrait camera; keep enough vertical space on narrow coding panels.
   useEffect(() => {
-    const distance = size.width / size.height < 0.85 ? 1.35 : 1.15;
-    camera.position.set(0, character.target.y + 0.035, distance);
-    camera.lookAt(character.target);
+    const narrow = size.width / size.height < 0.85;
+    const distance = interviewer === "female" ? (narrow ? 1.98 : 1.65) : (narrow ? 1.35 : 1.15);
+    camera.position.set(0, character.target.y + (interviewer === "female" ? 0.11 : 0.035), distance);
+    camera.lookAt(character.target.x, character.target.y + (interviewer === "female" ? 0.055 : 0), character.target.z);
     camera.updateProjectionMatrix();
-  }, [camera, character.target, size.width, size.height]);
+  }, [camera, character.target, size.width, size.height, interviewer]);
 
   useFrame(({ clock }, delta) => {
     if (warmup.current.compiled && !warmup.current.ready && ++warmup.current.frames >= 2) {
@@ -218,6 +233,11 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
       blinkWeight = progress < 0.35 ? Math.sin(progress / 0.35 * Math.PI / 2) : Math.cos((progress - 0.35) / 0.65 * Math.PI / 2);
       if (progress >= 1) blinkState.elapsed = -1;
     }
+    // The photo-derived eyeballs should disappear behind nearly closed lids,
+    // rather than leaving the reference's iris visible through the blink.
+    for (const material of character.eyeMaterials) {
+      material.setValues({ opacity: 1 - THREE.MathUtils.smoothstep(blinkWeight, 0.35, 0.85) });
+    }
 
     state.gazeNext -= dt;
     if (state.gazeNext <= 0) {
@@ -229,7 +249,7 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
     state.gazeX = damp(state.gazeX, state.gazeTargetX, 14);
     state.gazeY = damp(state.gazeY, state.gazeTargetY, 14);
     const rounded = (speechWeights.O ?? 0) + (speechWeights.U ?? 0) + (speechWeights.PP ?? 0);
-    const smile = (0.04 * (1 - state.speaking) + 0.008 * state.speaking) * (1 - Math.min(1, rounded));
+    const smile = ((interviewer === "female" ? 0.065 : 0.04) * (1 - state.speaking) + 0.008 * state.speaking) * (1 - Math.min(1, rounded));
     const brow = 0.025 + state.thinking * 0.07 + state.energy * 0.045;
 
     for (const face of character.faces) {
@@ -247,6 +267,8 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
           target = visemes[name.slice(7)] ?? 0;
         } else if (name === "jawOpen") {
           target = face.hasVisemes ? jawBoost + missingJaw : arkit.jawOpen ?? 0;
+        } else if (name === "mouthClose" && interviewer === "female" && !frame.speaking) {
+          target = 0.12;
         } else if (name === "eyeBlinkLeft" || name === "eyeBlinkRight") {
           target = blinkWeight;
         } else if (name === "eyeLookOutLeft" || name === "eyeLookInRight") {
@@ -330,6 +352,7 @@ function HumanInterviewer({ frameRef, mood, onReady }: AvatarProps & { onReady: 
 export default function InterviewerAvatar(props: AvatarProps) {
   const [loaded, setLoaded] = useState(false);
   const { onStatusChange } = props;
+  const referencePortrait = props.interviewer === "female";
   const onReady = useCallback(() => {
     setLoaded(true);
     onStatusChange?.("ready");
@@ -338,7 +361,7 @@ export default function InterviewerAvatar(props: AvatarProps) {
   return (
     <div className="relative h-full w-full">
       <Canvas
-        camera={{ position: [0, 1.5, 1.3], fov: 30, near: 0.05, far: 20 }}
+        camera={{ position: [0, 1.5, 1.3], fov: referencePortrait ? 18 : 30, near: 0.05, far: 20 }}
         dpr={[1, 2]}
         shadows="soft"
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
@@ -348,14 +371,14 @@ export default function InterviewerAvatar(props: AvatarProps) {
         }}
         fallback={<div className="p-6 text-sm text-white/70">3D rendering is unavailable in this browser.</div>}
       >
-        <ambientLight intensity={0.16} color="#e7ebef" />
-        <directionalLight position={[-1.8, 2.7, 3]} intensity={1.9} color="#fff2e7"
+        <ambientLight intensity={referencePortrait ? 0.3 : 0.16} color="#e7ebef" />
+        <directionalLight position={referencePortrait ? [-1.8, 3.5, 4.5] : [-1.8, 2.7, 3]} intensity={referencePortrait ? 1.45 : 1.9} color="#fff2e7"
           castShadow shadow-mapSize={[2048, 2048]} shadow-normalBias={0.003} shadow-bias={-0.00015}
           shadow-camera-left={-1.2} shadow-camera-right={1.2}
           shadow-camera-top={2.2} shadow-camera-bottom={-0.2}
           shadow-camera-near={0.1} shadow-camera-far={8} />
-        <directionalLight position={[2, 2, 2]} intensity={0.45} color="#e5edff" />
-        <directionalLight position={[0.5, 2.5, -1.5]} intensity={0.65} color="#ffffff" />
+        <directionalLight position={[2, 2, 2]} intensity={referencePortrait ? 0.65 : 0.45} color="#e5edff" />
+        <directionalLight position={[0.5, 2.5, -1.5]} intensity={referencePortrait ? 0.4 : 0.65} color="#ffffff" />
         {/* Generated light cards provide eye reflections without an HDR download. */}
         <Environment resolution={128} frames={1}>
           <Lightformer position={[-2, 3, 4]} scale={[3, 3, 1]} intensity={1.5} color="#fff2e7" />

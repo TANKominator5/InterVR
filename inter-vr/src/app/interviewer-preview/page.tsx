@@ -2,6 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 import InterviewerPanel from "@/components/interviewer/InterviewerPanel";
+import InterviewerChoice from "@/components/interviewer/InterviewerChoice";
+import { DEFAULT_INTERVIEWER, type InterviewerId } from "@/lib/interviewer/profiles";
 import { createSpeechFrame, useInterviewerSpeech, type InterviewerMood } from "@/hooks/useInterviewerSpeech";
 import { OCULUS_TO_PROCEDURAL, type OculusViseme } from "@/lib/interviewer/viseme-map";
 
@@ -9,7 +11,8 @@ import { OCULUS_TO_PROCEDURAL, type OculusViseme } from "@/lib/interviewer/visem
 // a monitored interview, signing in, or granting camera/microphone access.
 export default function InterviewerPreviewPage() {
   const frame = useMemo(() => createSpeechFrame(), []);
-  const speech = useInterviewerSpeech(frame);
+  const [interviewer, setInterviewer] = useState<InterviewerId>(DEFAULT_INTERVIEWER);
+  const speech = useInterviewerSpeech(frame, interviewer);
   const [mood, setMood] = useState<InterviewerMood>("idle");
   const [text, setText] = useState("Welcome. Tell me about a project you are proud of, and how you solved its biggest challenge.");
   const [busy, setBusy] = useState(false);
@@ -50,7 +53,13 @@ export default function InterviewerPreviewPage() {
         <h1 className="text-2xl font-semibold">Interviewer preview</h1>
         <p className="mt-1 text-sm text-muted-foreground">Test the human model and speech without starting an interview.</p>
       </div>
-      <InterviewerPanel frameRef={frame} mood={mood} phaseLabel={mood} engine={speech.engine}
+      <InterviewerChoice value={interviewer} onChange={(choice) => {
+        if (choice === interviewer) return;
+        stop();
+        setAvatarStatus("loading");
+        setInterviewer(choice);
+      }} />
+      <InterviewerPanel frameRef={frame} interviewer={interviewer} mood={mood} phaseLabel={mood} engine={speech.engine}
         modelLoading={speech.loading} modelProgress={speech.progress} voiceError={speech.error} onPreloadVoice={() => void speech.preload()}
         onAvatarStatusChange={setAvatarStatus} />
       <label className="block text-sm font-medium">

@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS public.interview_sessions (
   difficulty TEXT NOT NULL,
   duration TEXT NOT NULL,
   tone TEXT NOT NULL,
+  interviewer TEXT NOT NULL DEFAULT 'male' CHECK (interviewer IN ('male', 'female')),
   status TEXT DEFAULT 'pending',
   questions JSONB,
   livekit_room_name TEXT,

@@ -11,6 +11,7 @@ import {
   wordsToTimedVisemes,
 } from "@/lib/interviewer/viseme-map";
 import { approximateSpeechCues, estimateWordTimings, splitSpeechText } from "@/lib/interviewer/speech-timing";
+import { DEFAULT_INTERVIEWER, INTERVIEWERS, selectBrowserVoice, type InterviewerId } from "@/lib/interviewer/profiles";
 
 export type SpeechEngine = "unrealspeech" | "headtts" | "browser" | "uninitialized";
 export type InterviewerMood = "speaking" | "listening" | "thinking" | "idle";
@@ -79,7 +80,8 @@ function decodeWavToAudioBuffer(ctx: BaseAudioContext, wavBytes: ArrayBuffer): P
   return ctx.decodeAudioData(copy);
 }
 
-export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
+export function useInterviewerSpeech(frameRef: { current: SpeechFrame }, interviewer: InterviewerId = DEFAULT_INTERVIEWER) {
+  const voice = INTERVIEWERS[interviewer].voice;
   const [engine, setEngine] = useState<SpeechEngine>("uninitialized");
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -159,7 +161,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
         endpoints: ["webgpu", "wasm"],
         audioCtx: audioCtxRef.current,
         languages: ["en-us"],
-        voices: ["af_bella"],
+        voices: [INTERVIEWERS.male.voice, INTERVIEWERS.female.voice],
         workerModule:
           "https://cdn.jsdelivr.net/npm/@met4citizen/headtts@1.3/modules/worker-tts.mjs",
         dictionaryURL:
@@ -167,7 +169,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
       });
       pendingHeadttsRef.current = headtts;
       await headtts.connect();
-      await headtts.setup({ voice: "af_bella", language: "en-us", speed: 1, audioEncoding: "wav" });
+      await headtts.setup({ voice, language: "en-us", speed: 1, audioEncoding: "wav" });
       // Stopping an utterance must not discard a voice that has just finished
       // loading. Only component unmount cancels initialization.
       if (!mountedRef.current) {
@@ -194,7 +196,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
       initializingRef.current = false;
       if (mountedRef.current) setLoading(false);
     }
-  }, [frameRef]);
+  }, [frameRef, voice]);
 
   // Prepare the configured server voice without downloading a large local
   // model. Local HeadTTS remains an optional, explicitly loaded alternative.
@@ -345,9 +347,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
         utt.rate = 0.95;
         utt.pitch = 1;
         const voices = window.speechSynthesis.getVoices();
-        const preferred =
-          voices.find((v) => v.name.includes("Google") && v.lang.startsWith("en")) ||
-          voices.find((v) => v.lang.startsWith("en"));
+        const preferred = selectBrowserVoice(voices, interviewer);
         if (preferred) utt.voice = preferred;
 
         // Word-boundary fallback: build heuristic visemes as words arrive.
@@ -405,7 +405,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
         window.speechSynthesis.speak(utt);
       });
     },
-    [finishSpeak, frameRef]
+    [finishSpeak, frameRef, interviewer]
   );
 
   const speak = useCallback(
@@ -428,7 +428,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
             const response = await fetch("/api/interview/tts", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text: chunk }),
+              body: JSON.stringify({ text: chunk, interviewer }),
               signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]),
             });
             if (!response.ok) {
@@ -457,6 +457,8 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
       }
       if (headttsRef.current) {
         try {
+          await headttsRef.current.setup({ voice, language: "en-us", speed: 1, audioEncoding: "wav" });
+          if (generation !== generationRef.current) return;
           const msgs = await headttsRef.current.synthesize({ input: text.trim() });
           if (generation !== generationRef.current) return;
           const audio = msgs.filter((m) => m.type === "audio");
@@ -479,7 +481,7 @@ export function useInterviewerSpeech(frameRef: { current: SpeechFrame }) {
       frameRef.current.engine = "browser";
       await speakViaBrowser(text.trim());
     },
-    [cancel, frameRef, playHeadTTSAudio, speakViaBrowser]
+    [cancel, frameRef, playHeadTTSAudio, speakViaBrowser, interviewer, voice]
   );
 
   useEffect(() => {

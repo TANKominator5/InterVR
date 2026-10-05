@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Volume2, Ear, Brain, CheckCircle2, Loader2 } from "lucide-react";
 import type { SpeechFrame, InterviewerMood } from "@/hooks/useInterviewerSpeech";
+import { DEFAULT_INTERVIEWER, INTERVIEWERS, type InterviewerId } from "@/lib/interviewer/profiles";
 
 const InterviewerAvatar = dynamic(() => import("./InterviewerAvatar"), {
   ssr: false,
@@ -32,6 +33,7 @@ class AvatarBoundary extends Component<{ children: ReactNode; onStatusChange?: P
 interface Props {
   frameRef: { current: SpeechFrame };
   mood: InterviewerMood;
+  interviewer?: InterviewerId;
   phaseLabel: string;
   engine: string;
   modelLoading: boolean;
@@ -51,6 +53,7 @@ const MOOD_META: Record<InterviewerMood, { icon: typeof Volume2; label: string }
 export default function InterviewerPanel({
   frameRef,
   mood,
+  interviewer = DEFAULT_INTERVIEWER,
   phaseLabel,
   engine,
   modelLoading,
@@ -78,7 +81,7 @@ export default function InterviewerPanel({
               }`}
             />
           </span>
-          <span className="text-sm font-semibold tracking-tight">Your interviewer</span>
+          <span className="text-sm font-semibold tracking-tight">{INTERVIEWERS[interviewer].name} · Your interviewer</span>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted border border-border font-mono">
             {phaseLabel}
           </span>
@@ -91,8 +94,8 @@ export default function InterviewerPanel({
       <div className="relative h-[340px] sm:h-[380px]" style={{ background: "radial-gradient(ellipse at 40% 35%, #666d67 0%, #3a423e 45%, #232c29 100%)" }}>
         <div aria-hidden className="pointer-events-none absolute inset-y-0 right-[12%] w-px bg-white/10" />
         <div aria-hidden className="pointer-events-none absolute inset-y-0 right-[24%] w-px bg-white/5" />
-        <AvatarBoundary onStatusChange={onAvatarStatusChange}>
-          <InterviewerAvatar frameRef={frameRef} mood={mood} onStatusChange={onAvatarStatusChange} />
+        <AvatarBoundary key={`${interviewer}:${INTERVIEWERS[interviewer].modelUrl}`} onStatusChange={onAvatarStatusChange}>
+          <InterviewerAvatar frameRef={frameRef} mood={mood} interviewer={interviewer} onStatusChange={onAvatarStatusChange} />
         </AvatarBoundary>
         <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/55 border border-white/10 backdrop-blur">
