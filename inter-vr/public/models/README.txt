@@ -35,36 +35,47 @@ Michael uses the approved interviewer.glb with its original proportions,
 hairstyle, facial details and charcoal outfit. There are no variant-specific
 bone scale changes or hair cuts applied to this character.
 
-Bella is a separately authored interviewer-female.glb (3.24 MB). It retains the
-MPFB rig and facial channels, with a softly sculpted lower face/nose, subtle
-adult skin detail, chestnut chin-length bob and a simple muted plum outfit.
-The fringe is shaped above the eyes for clear eye contact. Facial sculpting is
-applied consistently to the bind mesh AND every authored expression; eyes,
-teeth and tongue continue to follow speech. The bob is bound to the Head joint.
+Bella uses interviewer-female-photo.glb (approximately 2.61 MB), authored from
+the user-supplied portrait in assets/interviewer/female-reference.webp.
+Reference pixels are projected into the skinned facial UVs, the movable eyes,
+and an authored side-part bob with a fitted hair curtain and 500 fine strands.
+The model remains a 3D skeleton with all authored facial/speech channels; it is
+not a static portrait substituted for the avatar. Texture projection is
+calibrated for the interviewer's frontal portrait view and modest head motion.
 
-Additional CC0 assets: MakeHuman system bob02 mesh/strand texture and
-middleage_lightskinned_female_diffuse skin texture (blended with the source skin).
-Asset pack, license and previews:
-https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html
-https://files.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip
-Hair OBJ SHA-256: 30d44038836d786364eb4134a9259cf93ca0c707f883861b0135ebfb149caa08
-Hair PNG SHA-256: 38c88e6f71631356591f09b1f17a1bb5a99c3bb095b1a29003f1dc3d3e839b0d
-Skin PNG SHA-256: bcb9c2c8ace23880bc4407602a249abbcf4608b6ba0894e423b031913012a363
+The reference's lighting is preserved through unlit face/eye/hair materials.
+Other meshes retain their normal 3D shading. Skin under the eyes is inpainted
+so closed lids do not display a painted iris; eyeballs fade behind closing
+lids. The photo's backdrop is removed only where connected to the image edges,
+preserving internal highlights such as eye whites.
+
+Eye detail uses a separate portrait texture registered to each eye's neutral
+centre, with the spherical geometry and authored gaze morphs preserved. Face
+UVs are baked from the sculpted positions and share depth-aware projection
+with the hair. Facial UV islands have five pixels of colour padding to avoid
+old-colour bleed at temples/ears. The hair mask excludes facial skin with a
+feathered overlap, so its curtain cannot project a second cheek onto the face.
+
+Facial sculpting applies to both bind geometry and authored expressions.
+The source MPFB mesh remains CC0; the supplied reference image is separate
+from that license and is used at the user's request. A lossless authoring
+copy is retained outside public/ for reproducible builds.
 
 Both assets are locally hosted and use Meshopt/WebP. The dashboard preloads
 the selected model; each model has its own loader cache. Dashboard portraits
-are interviewer-male-original.png and interviewer-female-bob.png.
+are interviewer-male-original.png and interviewer-female-photo.png.
 Voices: am_michael and af_bella respectively.
 
 Rebuild Bella (offline authoring only; no tooling is needed at runtime):
 
-1. Extract the CC0 system asset pack into an asset-input directory.
+1. Download the full-resolution CC0 mpfb.glb from the source URL above.
 2. In a separate tooling directory, install @gltf-transform/core@4.5.1,
    @gltf-transform/extensions@4.5.1, @gltf-transform/functions@4.5.1,
    meshoptimizer, gl-matrix and sharp.
 3. From the application root, run:
-   node scripts/build-female-interviewer.mjs --tools <tooling-directory> --assets <asset-input-directory>
+   node scripts/build-female-interviewer.mjs --tools <tooling-directory> --source <full-resolution-mpfb.glb> --reference assets/interviewer/female-reference.webp
 
-The script reads interviewer.glb and writes interviewer-female.glb. It never
-writes to the approved original asset. Refresh Bella's dashboard portrait from
-the rendered neutral pose after an intentional model change.
+The script writes interviewer-female-photo.glb and never writes to the approved
+interviewer.glb. Refresh Bella's dashboard portrait from the rendered neutral
+pose after an intentional model change. The GLB embeds its source reference
+dimensions and decoded-pixel SHA-256 fingerprint for provenance checks.

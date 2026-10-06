@@ -3,6 +3,7 @@
 export async function referenceSkin({ image, surface, sharp, photo }) {
   const size = 4096;
   const pixels = await sharp(image).resize(size, size).ensureAlpha().raw().toBuffer();
+  const painted = new Uint8Array(size * size), frontier = [];
   const { positions, uvs, indices } = surface;
   const gaussian = (v, center, radius) => Math.exp(-(((v - center) / radius) ** 2));
   const clamp = (v) => Math.max(0, Math.min(1, v));
@@ -15,6 +16,7 @@ export async function referenceSkin({ image, surface, sharp, photo }) {
       const color = photo.skinSample([x * (1 - neck * 0.4), Math.max(y, 1.452), z]);
       const front = clamp((z - 0.018) / 0.045);
       for (let c = 0; c < 3; c++) pixels[index + c] = Math.round(pixels[index + c] * (1 - front) + color[c] * front);
+      if (!painted[index / 4]) { painted[index / 4] = 1; frontier.push(index / 4); }
       return;
     }
     if (z < 0.065 || y < 1.51 || y > 1.715 || Math.abs(x) > 0.079) return;
@@ -52,6 +54,24 @@ export async function referenceSkin({ image, surface, sharp, photo }) {
       if (Math.min(u, v, w) < 0) continue;
       paint((y * size + x) * 4, [0, 1, 2].map((axis) => points[0][axis] * u + points[1][axis] * v + points[2][axis] * w), x, y);
     }
+  }
+  // Pad projected UV islands so bilinear/mipmap sampling at ears and temples
+  // cannot pull the old skin colour through an unpainted triangle boundary.
+  let edge = frontier;
+  for (let pass = 0; pass < 5; pass++) {
+    const next = [];
+    for (const index of edge) {
+      const x = index % size;
+      const neighbours = [index - size, index + size];
+      if (x > 0) neighbours.push(index - 1);
+      if (x < size - 1) neighbours.push(index + 1);
+      for (const n of neighbours) {
+        if (n < 0 || n >= painted.length || painted[n]) continue;
+        painted[n] = 1; next.push(n);
+        for (let c = 0; c < 3; c++) pixels[n * 4 + c] = pixels[index * 4 + c];
+      }
+    }
+    edge = next;
   }
   return sharp(pixels, { raw: { width: size, height: size, channels: 4 } }).webp({ quality: 94 }).toBuffer();
 }

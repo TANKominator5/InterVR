@@ -94,29 +94,38 @@ for (const node of root.listNodes()) {
   const mesh = node.getMesh();
   if (!mesh || !node.getSkin() || /ponytail|casualsuit/.test(node.getName())) continue;
   for (const primitive of mesh.listPrimitives()) {
+    if (mesh.getName() === "high-poly") {
+      const matrices = vertexMatrices(node, primitive), positions = primitive.getAttribute("POSITION");
+      const uv = Array.from({ length: positions.getCount() }, (_, i) =>
+        photo.eyeUv(vec3.transformMat4([], positions.getElement(i, []), matrices[i].matrix)));
+      primitive.getAttribute("TEXCOORD_0").setArray(new Float32Array(uv.flat())).setNormalized(false);
+      const eyeTexture = document.createTexture("Bella.reference_eye_detail").setMimeType("image/webp").setImage(photo.eyeTexture);
+      primitive.getMaterial().setBaseColorTexture(eyeTexture).setBaseColorFactor([1, 1, 1, 1]).setAlphaMode("OPAQUE")
+        .setExtension("KHR_materials_unlit", unlit.createUnlit());
+      // Keep spherical geometry and authored gaze shapes. Iris registration
+      // uses each eye's own neutral centre, independent of the face/hair warp.
+      continue;
+    }
+    if (/eyelashes/.test(node.getName())) {
+      primitive.getMaterial().setBaseColorFactor([0.025, 0.017, 0.01, 1]).setRoughnessFactor(0.85);
+    }
     const positions = primitive.getAttribute("POSITION");
     const matrices = vertexMatrices(node, primitive);
     const original = Array.from({ length: positions.getCount() }, (_, i) => positions.getElement(i, []));
+    const edited = original.map((point, i) => vec3.transformMat4([], sculpt(vec3.transformMat4([], point, matrices[i].matrix)), matrices[i].inverse));
     if (mesh.getName() === "base") {
       faceSurface = {
-        positions: original.map((point, i) => vec3.transformMat4([], point, matrices[i].matrix)),
+        positions: edited.map((point, i) => vec3.transformMat4([], point, matrices[i].matrix)),
         uvs: original.map((_, i) => primitive.getAttribute("TEXCOORD_0").getElement(i, [])),
         indices: Array.from(primitive.getIndices().getArray()),
       };
     }
-    const edited = original.map((point, i) => vec3.transformMat4([], sculpt(vec3.transformMat4([], point, matrices[i].matrix)), matrices[i].inverse));
     positions.setArray(new Float32Array(edited.flat())).setNormalized(false);
     const normals = primitive.getAttribute("NORMAL");
     const originalNormals = Array.from({ length: normals.getCount() }, (_, i) => normals.getElement(i, []));
     const editedNormals = originalNormals.map((normal, i) => vec3.normalize([], vec3.transformMat3([], normal,
       normalTransform(original[i], matrices[i].matrix, matrices[i].inverse))));
     normals.setArray(new Float32Array(editedNormals.flat())).setNormalized(false);
-    if (photo && mesh.getName() === "high-poly") {
-      const uv = edited.map((point, i) => photo.uv(vec3.transformMat4([], point, matrices[i].matrix)));
-      primitive.getAttribute("TEXCOORD_0").setArray(new Float32Array(uv.flat())).setNormalized(false);
-      primitive.getMaterial().setBaseColorTexture(photoTexture).setBaseColorFactor([1, 1, 1, 1]).setAlphaMode("OPAQUE")
-        .setExtension("KHR_materials_unlit", unlit.createUnlit());
-    }
     for (const target of primitive.listTargets()) {
       const deltas = target.getAttribute("POSITION");
       if (!deltas) continue;

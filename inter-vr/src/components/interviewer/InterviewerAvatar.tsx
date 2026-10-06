@@ -71,7 +71,8 @@ function prepareCharacter(source: THREE.Group, interviewer: InterviewerId) {
         material.toneMapped = false;
         if (/high-poly/i.test(material.name)) {
           material.transparent = true;
-          material.depthWrite = false;
+          material.depthWrite = true;
+          material.side = THREE.FrontSide;
           eyeMaterials.push(material);
         }
       }
@@ -271,6 +272,10 @@ function HumanInterviewer({ frameRef, mood, interviewer = DEFAULT_INTERVIEWER, o
           target = 0.12;
         } else if (name === "eyeBlinkLeft" || name === "eyeBlinkRight") {
           target = blinkWeight;
+        } else if (interviewer === "female" && (name === "eyeWideLeft" || name === "eyeWideRight")) {
+          target = 0;
+        } else if (interviewer === "female" && (name === "eyeSquintLeft" || name === "eyeSquintRight")) {
+          target = 0;
         } else if (name === "eyeLookOutLeft" || name === "eyeLookInRight") {
           target = Math.max(0, state.gazeX);
         } else if (name === "eyeLookInLeft" || name === "eyeLookOutRight") {

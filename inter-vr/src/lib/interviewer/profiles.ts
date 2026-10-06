@@ -15,7 +15,7 @@ export const INTERVIEWERS = {
   female: {
     name: "Bella",
     label: "Female interviewer",
-    modelUrl: "/models/interviewer-female-photo.glb",
+    modelUrl: "/models/interviewer-female-photo.glb?v=eyes-hairline-3",
     portrait: "/models/interviewer-female-photo.png",
     voice: "af_bella",
     outfitColor: "#463343",
